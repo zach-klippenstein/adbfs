@@ -23,7 +23,10 @@ func TestGetAttrRoot(t *testing.T) {
 			},
 		},
 	}
-	fs, err := NewAdbFileSystem("", 1, func() DeviceClient { return dev })
+	fs, err := NewAdbFileSystem(Config{
+		Mountpoint:    "",
+		ClientFactory: func() DeviceClient { return dev },
+	})
 	assert.NoError(t, err)
 
 	attr, status := fs.GetAttr("", NewContext(1, 2, 3))
@@ -51,7 +54,10 @@ func TestGetAttrRegularFile(t *testing.T) {
 			},
 		},
 	}
-	fs, err := NewAdbFileSystem("", 1, func() DeviceClient { return dev })
+	fs, err := NewAdbFileSystem(Config{
+		Mountpoint:    "",
+		ClientFactory: func() DeviceClient { return dev },
+	})
 	assert.NoError(t, err)
 
 	attr, status := fs.GetAttr("version.txt", NewContext(1, 2, 3))

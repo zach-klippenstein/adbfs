@@ -8,6 +8,7 @@ import (
 	"os/signal"
 	"path/filepath"
 
+	"github.com/Sirupsen/logrus"
 	"github.com/hanwen/go-fuse/fuse"
 	"github.com/hanwen/go-fuse/fuse/nodefs"
 	"github.com/hanwen/go-fuse/fuse/pathfs"
@@ -19,13 +20,18 @@ var (
 	deviceSerial = flag.String("device", "", "Device serial number to mount.")
 	mountpoint   = flag.String("mountpoint", "", "Directory to mount the device on.")
 	adbPort      = flag.Int("port", goadb.AdbPort, "Port to connect to adb server on.")
-	verbose      = flag.Bool("v", false, "Whether to log verbosely.")
+	logLevel     = flag.String("loglevel", "info", "Detail of logs to show.")
 )
 
 func main() {
 	flag.Parse()
+	log := logrus.StandardLogger()
 
-	fs.VerboseLogging = *verbose
+	logLevel, err := logrus.ParseLevel(*logLevel)
+	if err != nil {
+		log.Fatal(err)
+	}
+	log.Level = logLevel
 
 	if *mountpoint == "" {
 		log.Fatalln("Mountpoint must be specified. Run with -h.")
@@ -35,20 +41,24 @@ func main() {
 		log.Fatal(err)
 	}
 
-	client, err := goadb.NewHostClientPort(*adbPort)
-	if err != nil {
-		log.Fatal(err)
+	clientConfig := goadb.ClientConfig{
+		Dialer: goadb.NewDialer("", *adbPort),
 	}
-
+	deviceDescriptor := goadb.DeviceWithSerial(*deviceSerial)
 	clientFactory := func() fs.DeviceClient {
-		return client.GetDeviceWithSerial(*deviceSerial)
+		return goadb.NewDeviceClient(clientConfig, deviceDescriptor)
 	}
 
 	var fsImpl pathfs.FileSystem
-	fsImpl, err = fs.NewAdbFileSystem(absoluteMountpoint, 1, clientFactory)
+	fsImpl, err = fs.NewAdbFileSystem(fs.Config{
+		Mountpoint:    absoluteMountpoint,
+		ClientFactory: clientFactory,
+		Log:           log,
+	})
 	if err != nil {
 		log.Fatal(err)
 	}
+	// loggingFs := fs.NewLoggingFileSystem(fsImpl, log)
 
 	fs := pathfs.NewPathNodeFs(fsImpl, nil)
 

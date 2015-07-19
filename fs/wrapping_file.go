@@ -2,9 +2,9 @@ package fs
 
 import (
 	"fmt"
-	"log"
 	"time"
 
+	"github.com/Sirupsen/logrus"
 	"github.com/hanwen/go-fuse/fuse"
 	"github.com/hanwen/go-fuse/fuse/nodefs"
 )
@@ -14,14 +14,19 @@ type WrappingFile struct {
 	AfterCall func(fs *WrappingFile, method string, args, results []interface{})
 }
 
-func NewLoggingFile(file nodefs.File) nodefs.File {
+func NewLoggingFile(file nodefs.File, log *logrus.Logger) nodefs.File {
 	return &WrappingFile{
 		File: file,
 		AfterCall: func(f *WrappingFile, method string, args, results []interface{}) {
 			summarizeByteSlices(args)
 			summarizeByteSlices(results)
 
-			log.Printf("[%s] %s: %+v → %+v", f.File, method, args, results)
+			log.WithFields(logrus.Fields{
+				"file":      f.File,
+				"operation": method,
+				"args":      fmt.Sprintf("%+v", args),
+				"results":   fmt.Sprintf("%+v", results),
+			}).Debug()
 		},
 	}
 }
