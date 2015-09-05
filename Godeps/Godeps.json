@@ -1,0 +1,19 @@
+{
+	"ImportPath": "github.com/zach-klippenstein/adbfs",
+	"GoVersion": "go1.5",
+	"Deps": [
+		{
+			"ImportPath": "github.com/Sirupsen/logrus",
+			"Comment": "v0.8.6-9-g27b713c",
+			"Rev": "27b713cfd2742876645e3692a488c5e3fd65361d"
+		},
+		{
+			"ImportPath": "github.com/hanwen/go-fuse/fuse",
+			"Rev": "324ea173d0a4d90e0e97c464a6ad33f80c9587a8"
+		},
+		{
+			"ImportPath": "github.com/zach-klippenstein/goadb",
+			"Rev": "b0842f499cf728d81f21ffe652465d5627ca777f"
+		}
+	]
+}
