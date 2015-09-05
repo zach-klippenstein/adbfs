@@ -1,9 +1,14 @@
-// See package fs for the filesystem implementation.
+/*
+Another FUSE filesystem that can mount any device visible to your adb server.
+Uses github.com/zach-klippenstein/goadb to interface with the server directly
+instead of calling out to the adb client program.
+
+See package fs for the filesystem implementation.
+*/
 package main
 
 import (
 	"flag"
-	"log"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -25,13 +30,7 @@ var (
 
 func main() {
 	flag.Parse()
-	log := logrus.StandardLogger()
-
-	logLevel, err := logrus.ParseLevel(*logLevel)
-	if err != nil {
-		log.Fatal(err)
-	}
-	log.Level = logLevel
+	log := initializeLogger()
 
 	if *mountpoint == "" {
 		log.Fatalln("Mountpoint must be specified. Run with -h.")
@@ -41,75 +40,86 @@ func main() {
 		log.Fatal(err)
 	}
 
-	clientConfig := goadb.ClientConfig{
-		Dialer: goadb.NewDialer("", *adbPort),
+	fs := initializeFileSystem(absoluteMountpoint, log)
+
+	server, _, err := nodefs.MountRoot(absoluteMountpoint, fs.Root(), nil)
+	if err != nil {
+		log.Fatal(err)
 	}
-	deviceDescriptor := goadb.DeviceWithSerial(*deviceSerial)
-	clientFactory := func() fs.DeviceClient {
-		return goadb.NewDeviceClient(clientConfig, deviceDescriptor)
+	log.Printf("mounted %s on %s", *deviceSerial, absoluteMountpoint)
+	defer func() {
+		log.Println("unmounting...")
+		server.Unmount()
+		log.Println("unmounted.")
+	}()
+
+	serverDone := startServer(server, log)
+
+	signals := make(chan os.Signal, 1)
+	signal.Notify(signals, os.Interrupt, os.Kill)
+
+	for {
+		select {
+		case signal := <-signals:
+			log.Println("got signal", signal)
+			switch signal {
+			case os.Kill, os.Interrupt:
+				log.Println("exiting...")
+				return
+			}
+
+		case <-serverDone:
+			return
+		}
+	}
+}
+
+func initializeLogger() (log *logrus.Logger) {
+	log = logrus.StandardLogger()
+
+	logLevel, err := logrus.ParseLevel(*logLevel)
+	if err != nil {
+		log.Fatal(err)
+	}
+	log.Level = logLevel
+
+	log.Formatter = &logrus.TextFormatter{
+		FullTimestamp: true,
 	}
 
+	return
+}
+
+func initializeFileSystem(mountpoint string, log *logrus.Logger) *pathfs.PathNodeFs {
+	clientFactory := fs.NewGoadbDeviceClientFactory(*adbPort, *deviceSerial)
+
 	var fsImpl pathfs.FileSystem
-	fsImpl, err = fs.NewAdbFileSystem(fs.Config{
-		Mountpoint:    absoluteMountpoint,
+	fsImpl, err := fs.NewAdbFileSystem(fs.Config{
+		Mountpoint:    mountpoint,
 		ClientFactory: clientFactory,
 		Log:           log,
 	})
 	if err != nil {
 		log.Fatal(err)
 	}
-	// loggingFs := fs.NewLoggingFileSystem(fsImpl, log)
 
-	fs := pathfs.NewPathNodeFs(fsImpl, nil)
-
-	server, _, err := nodefs.MountRoot(absoluteMountpoint, fs.Root(), nil)
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer server.Unmount()
-
-	signals := make(chan os.Signal, 1)
-	signal.Notify(signals, os.Interrupt, os.Kill)
-
-	serverDone := make(chan struct{})
-	go func() {
-		server.Serve()
-		close(serverDone)
-	}()
-
-	serverReady := make(chan struct{})
-	go func() {
-		server.WaitMount()
-		close(serverReady)
-	}()
-
-	// Wait for server to come up.
-	select {
-	case <-serverReady:
-		log.Println("filesystem ready")
-	case <-serverDone:
-		log.Println("server finished prematurely")
-	}
-
-	// Wait for server to finish.
-	for {
-		select {
-		case <-serverDone:
-			log.Println("unmounted")
-			os.Exit(0)
-		case signal := <-signals:
-			HandleSignal(signal, server)
-		}
-	}
+	return pathfs.NewPathNodeFs(fsImpl, nil)
 }
 
-func HandleSignal(signal os.Signal, server *fuse.Server) {
-	log.Println("got signal", signal)
-	switch signal {
-	case os.Kill, os.Interrupt:
-		log.Println("unmounting filesystem…")
-		server.Unmount()
-	}
+func startServer(server *fuse.Server, log *logrus.Logger) <-chan struct{} {
+	serverDone := make(chan struct{}, 1)
+	go func() {
+		defer close(serverDone)
+		server.Serve()
+		log.Println("server finished.")
+	}()
+
+	// Wait for OS to finish initializing the mount.
+	server.WaitMount()
+
+	log.Println("server ready.")
+
+	return serverDone
 }
 
 func resolvePathFromWorkingDir(relative string) (string, error) {

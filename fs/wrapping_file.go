@@ -4,31 +4,18 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/Sirupsen/logrus"
 	"github.com/hanwen/go-fuse/fuse"
 	"github.com/hanwen/go-fuse/fuse/nodefs"
 )
 
+// WrappingFile is an implementation of nodefs.File that invokes a callback after
+// every method call.
 type WrappingFile struct {
 	nodefs.File
+
+	// AfterCall is called after every operation on the file with the method receiver,
+	// the name of the method, and slices of all the passed and returned values.
 	AfterCall func(fs *WrappingFile, method string, args, results []interface{})
-}
-
-func NewLoggingFile(file nodefs.File, log *logrus.Logger) nodefs.File {
-	return &WrappingFile{
-		File: file,
-		AfterCall: func(f *WrappingFile, method string, args, results []interface{}) {
-			summarizeByteSlices(args)
-			summarizeByteSlices(results)
-
-			log.WithFields(logrus.Fields{
-				"file":      f.File,
-				"operation": method,
-				"args":      fmt.Sprintf("%+v", args),
-				"results":   fmt.Sprintf("%+v", results),
-			}).Debug()
-		},
-	}
 }
 
 // Called upon registering the filehandle in the inode.

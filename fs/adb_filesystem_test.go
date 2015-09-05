@@ -1,8 +1,7 @@
-// TODO: Write more tests.
-// TODO: Implement better file read.
 package fs
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -15,13 +14,11 @@ import (
 
 func TestGetAttrRoot(t *testing.T) {
 	dev := &MockDeviceClient{
-		&MockDirEntry{
-			DirEntry: &goadb.DirEntry{
-				Name: "/",
-				Size: 0,
-				Mode: os.ModeDir | 0755,
-			},
-		},
+		&MockDirEntry{&goadb.DirEntry{
+			Name: "/",
+			Size: 0,
+			Mode: os.ModeDir | 0755,
+		}},
 	}
 	fs, err := NewAdbFileSystem(Config{
 		Mountpoint:    "",
@@ -29,7 +26,7 @@ func TestGetAttrRoot(t *testing.T) {
 	})
 	assert.NoError(t, err)
 
-	attr, status := fs.GetAttr("", NewContext(1, 2, 3))
+	attr, status := fs.GetAttr("", newContext(1, 2, 3))
 	assert.True(t, status.Ok(), "Expected status to be Ok, but was %s", status)
 	assert.NotNil(t, attr)
 
@@ -46,13 +43,11 @@ func TestGetAttrRoot(t *testing.T) {
 
 func TestGetAttrRegularFile(t *testing.T) {
 	dev := &MockDeviceClient{
-		&MockDirEntry{
-			DirEntry: &goadb.DirEntry{
-				Name: "/version.txt",
-				Size: 42,
-				Mode: 0444,
-			},
-		},
+		&MockDirEntry{&goadb.DirEntry{
+			Name: "/version.txt",
+			Size: 42,
+			Mode: 0444,
+		}},
 	}
 	fs, err := NewAdbFileSystem(Config{
 		Mountpoint:    "",
@@ -60,7 +55,7 @@ func TestGetAttrRegularFile(t *testing.T) {
 	})
 	assert.NoError(t, err)
 
-	attr, status := fs.GetAttr("version.txt", NewContext(1, 2, 3))
+	attr, status := fs.GetAttr("version.txt", newContext(1, 2, 3))
 	assert.True(t, status.Ok(), "Expected status to be Ok, was %s", status)
 	assert.NotNil(t, attr)
 
@@ -75,7 +70,7 @@ func TestGetAttrRegularFile(t *testing.T) {
 	assert.Equal(t, uint32(0444), attr.Mode&uint32(os.ModePerm))
 }
 
-func NewContext(uid int, gid int, pid int) *fuse.Context {
+func newContext(uid, gid, pid int) *fuse.Context {
 	return &fuse.Context{
 		Owner: fuse.Owner{
 			Uid: uint32(uid),
@@ -87,6 +82,13 @@ func NewContext(uid int, gid int, pid int) *fuse.Context {
 
 type MockDeviceClient struct {
 	Root *MockDirEntry
+}
+
+type MockDirEntries struct {
+	entries     []*MockDirEntry
+	nextPos     int
+	err         error
+	closeCalled bool
 }
 
 type MockDirEntry struct {
@@ -104,10 +106,36 @@ func (d *MockDeviceClient) Stat(path string) (*goadb.DirEntry, error) {
 	return nil, fmt.Errorf("Path does not exist: %s", path)
 }
 
-func (d *MockDeviceClient) ListDirEntries(path string) (*goadb.DirEntries, error) {
-	return nil, nil
+func (d *MockDeviceClient) ListDirEntries(path string) (DirEntries, error) {
+	return nil, errors.New("Not implemented")
 }
 
 func (d *MockDeviceClient) RunCommand(cmd string, args ...string) (string, error) {
-	return "", nil
+	return "", errors.New("Not implemented")
+}
+
+func (e *MockDirEntries) Next() bool {
+	if e.err != nil {
+		return false
+	}
+
+	if e.nextPos < len(e.entries) {
+		e.nextPos++
+		return true
+	}
+	return false
+}
+
+func (e *MockDirEntries) Entry() *goadb.DirEntry {
+	return e.entries[e.nextPos-1].DirEntry
+}
+
+func (e *MockDirEntries) Err() error {
+	return e.err
+}
+
+func (e *MockDirEntries) Close() error {
+	e.nextPos = len(e.entries) + 1
+	e.closeCalled = true
+	return e.err
 }
