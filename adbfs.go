@@ -8,10 +8,14 @@ See package fs for the filesystem implementation.
 package main
 
 import (
+	"errors"
 	"flag"
+	"fmt"
+	stdlog "log"
 	"os"
 	"os/signal"
 	"path/filepath"
+	"time"
 
 	"github.com/Sirupsen/logrus"
 	"github.com/hanwen/go-fuse/fuse"
@@ -29,10 +33,14 @@ var (
 )
 
 var (
-	server    *fuse.Server
-	log       *logrus.Logger
-	unmounted bool
+	server *fuse.Server
+	log    *logrus.Logger
+
+	// Accessed through atomic operations.
+	unmounted fs.AtomicBool
 )
+
+const StartTimeout = 5 * time.Second
 
 func main() {
 	flag.Parse()
@@ -56,23 +64,19 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	serverDone, err := startServer(StartTimeout)
+	if err != nil {
+		log.Fatal(err)
+	}
 	log.Printf("mounted %s on %s", *deviceSerial, absoluteMountpoint)
 	defer unmountServer()
-
-	serverDone := startServer()
 
 	signals := make(chan os.Signal, 1)
 	signal.Notify(signals, os.Interrupt, os.Kill)
 
-	deviceWatcher, _ := goadb.NewDeviceWatcher(clientConfig)
-
 	for {
 		select {
-		case event := <-deviceWatcher.C():
-			if event.Serial == *deviceSerial && event.NewState == "offline" {
-				handleDeviceDisconnected()
-			}
-
 		case signal := <-signals:
 			log.Println("got signal", signal)
 			switch signal {
@@ -82,6 +86,7 @@ func main() {
 			}
 
 		case <-serverDone:
+			log.Debugln("server done channel closed.")
 			return
 		}
 	}
@@ -99,6 +104,11 @@ func initializeLogger() {
 	log.Formatter = &logrus.TextFormatter{
 		FullTimestamp: true,
 	}
+
+	// Redirect standard logger (used by fuse) to our logger.
+	stdlog.SetOutput(log.Writer())
+	// Disable standard log timestamps, logrus has its own.
+	stdlog.SetFlags(0)
 
 	return
 }
@@ -120,20 +130,33 @@ func initializeFileSystem(clientConfig goadb.ClientConfig, mountpoint string, de
 	return pathfs.NewPathNodeFs(fsImpl, nil)
 }
 
-func startServer() <-chan struct{} {
-	serverDone := make(chan struct{}, 1)
+func startServer(startTimeout time.Duration) (<-chan struct{}, error) {
+	serverDone := make(chan struct{})
 	go func() {
 		defer close(serverDone)
 		server.Serve()
 		log.Println("server finished.")
+		return
 	}()
 
 	// Wait for OS to finish initializing the mount.
-	server.WaitMount()
+	// If server.Serve() fails (e.g. mountpoint doesn't exist), WaitMount() won't
+	// ever return. Running it in a separate goroutine allows us to detect that case.
+	serverReady := make(chan struct{})
+	go func() {
+		defer close(serverReady)
+		server.WaitMount()
+	}()
 
-	log.Println("server ready.")
-
-	return serverDone
+	select {
+	case <-serverReady:
+		log.Println("server ready.")
+		return serverDone, nil
+	case <-serverDone:
+		return nil, errors.New("unknown error")
+	case <-time.After(startTimeout):
+		return nil, errors.New(fmt.Sprint("server failed to start after", startTimeout))
+	}
 }
 
 func unmountServer() {
@@ -141,8 +164,7 @@ func unmountServer() {
 		panic("attempted to unmount server before creating it")
 	}
 
-	if !unmounted {
-		unmounted = true
+	if unmounted.CompareAndSwap(false, true) {
 		log.Println("unmounting...")
 		server.Unmount()
 		log.Println("unmounted.")
@@ -153,8 +175,12 @@ func handleDeviceDisconnected() {
 	// Server guaranteed to be non-nil by now, since we can't detect
 	// device disconnection without a filesystem op, which can't happen
 	// until the server has started.
-	log.Infoln("device disconnected, unmounting...")
-	unmountServer()
+	go func() {
+		if !unmounted.Value() {
+			log.Infoln("device disconnected, unmounting...")
+			unmountServer()
+		}
+	}()
 }
 
 func resolvePathFromWorkingDir(relative string) (string, error) {
