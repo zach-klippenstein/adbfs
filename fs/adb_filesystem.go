@@ -113,14 +113,7 @@ func (fs *AdbFileSystem) OpenDir(name string, _ *fuse.Context) ([]fuse.DirEntry,
 		return nil, logEntry.Status(fuse.EIO)
 	}
 
-	result, err := asFuseDirEntries(entries)
-	if util.HasErrCode(err, util.DeviceNotFound) {
-		return nil, fs.handleDeviceNotFound(logEntry)
-	} else if err != nil {
-		logEntry.ErrorMsg(err, "reading dir entries")
-		return nil, logEntry.Status(fuse.EIO)
-	}
-
+	result := asFuseDirEntries(entries)
 	return result, logEntry.Status(fuse.OK)
 }
 

@@ -31,17 +31,15 @@ func (b *AtomicBool) CompareAndSwap(oldVal, newVal bool) (swapped bool) {
 
 // asFuseDirEntries reads directory entries from a goadb DirEntries and returns them as a
 // list of fuse DirEntry objects.
-func asFuseDirEntries(entries DirEntries) (result []fuse.DirEntry, err error) {
-	defer entries.Close()
+func asFuseDirEntries(entries []*goadb.DirEntry) (result []fuse.DirEntry) {
+	result = make([]fuse.DirEntry, len(entries))
 
-	for entries.Next() {
-		entry := entries.Entry()
-		result = append(result, fuse.DirEntry{
+	for i, entry := range entries {
+		result[i] = fuse.DirEntry{
 			Name: entry.Name,
 			Mode: osFileModeToFuseFileMode(entry.Mode),
-		})
+		}
 	}
-	err = entries.Err()
 
 	return
 }

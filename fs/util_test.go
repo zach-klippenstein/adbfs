@@ -3,7 +3,6 @@ package fs
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
 	"testing"
 
 	"github.com/Sirupsen/logrus"
@@ -13,52 +12,25 @@ import (
 )
 
 func TestAsFuseDirEntriesNoErr(t *testing.T) {
-	entries := MockDirEntries{
-		entries: []*MockDirEntry{
-			&MockDirEntry{&goadb.DirEntry{
-				Name: "/foo.txt",
-				Size: 24,
-				Mode: 0444,
-			}},
-			&MockDirEntry{&goadb.DirEntry{
-				Name: "/bar.txt",
-				Size: 42,
-				Mode: 0444,
-			}},
+	entries := []*goadb.DirEntry{
+		&goadb.DirEntry{
+			Name: "/foo.txt",
+			Size: 24,
+			Mode: 0444,
+		},
+		&goadb.DirEntry{
+			Name: "/bar.txt",
+			Size: 42,
+			Mode: 0444,
 		},
 	}
 
-	fuseEntries, err := asFuseDirEntries(&entries)
-	assert.NoError(t, err)
+	fuseEntries := asFuseDirEntries(entries)
 	assert.Len(t, fuseEntries, 2)
 	assert.Equal(t, "/foo.txt", fuseEntries[0].Name)
 	assert.NotEqual(t, 0, fuseEntries[0].Mode)
 	assert.Equal(t, "/bar.txt", fuseEntries[1].Name)
 	assert.NotEqual(t, 0, fuseEntries[1].Mode)
-	assert.True(t, entries.closeCalled)
-}
-
-func TestAsFuseDirEntriesErr(t *testing.T) {
-	entries := MockDirEntries{
-		entries: []*MockDirEntry{
-			&MockDirEntry{&goadb.DirEntry{
-				Name: "/foo.txt",
-				Size: 24,
-				Mode: 0444,
-			}},
-			&MockDirEntry{&goadb.DirEntry{
-				Name: "/bar.txt",
-				Size: 42,
-				Mode: 0444,
-			}},
-		},
-		err: errors.New("fail"),
-	}
-
-	fuseEntries, err := asFuseDirEntries(&entries)
-	assert.EqualError(t, err, "fail")
-	assert.Empty(t, fuseEntries)
-	assert.True(t, entries.closeCalled)
 }
 
 func TestSummarizeByteSlicesForLog(t *testing.T) {

@@ -84,13 +84,6 @@ type MockDeviceClient struct {
 	Root *MockDirEntry
 }
 
-type MockDirEntries struct {
-	entries     []*MockDirEntry
-	nextPos     int
-	err         error
-	closeCalled bool
-}
-
 type MockDirEntry struct {
 	*goadb.DirEntry
 }
@@ -106,38 +99,12 @@ func (d *MockDeviceClient) Stat(path string) (*goadb.DirEntry, error) {
 	return nil, fmt.Errorf("Path does not exist: %s", path)
 }
 
-func (d *MockDeviceClient) ListDirEntries(path string) (DirEntries, error) {
+func (d *MockDeviceClient) ListDirEntries(path string) ([]*goadb.DirEntry, error) {
 	return nil, errors.New("Not implemented")
 }
 
 func (d *MockDeviceClient) ReadLink(path, rootPath string) (string, error, fuse.Status) {
 	return "", errors.New("Not implemented"), fuse.EIO
-}
-
-func (e *MockDirEntries) Next() bool {
-	if e.err != nil {
-		return false
-	}
-
-	if e.nextPos < len(e.entries) {
-		e.nextPos++
-		return true
-	}
-	return false
-}
-
-func (e *MockDirEntries) Entry() *goadb.DirEntry {
-	return e.entries[e.nextPos-1].DirEntry
-}
-
-func (e *MockDirEntries) Err() error {
-	return e.err
-}
-
-func (e *MockDirEntries) Close() error {
-	e.nextPos = len(e.entries) + 1
-	e.closeCalled = true
-	return e.err
 }
 
 func assertStatusOk(t *testing.T, status fuse.Status) {
