@@ -1,17 +1,27 @@
 package fs
 
 import (
+	"fmt"
 	"io"
+	"path/filepath"
+	"strings"
 
+	"github.com/hanwen/go-fuse/fuse"
 	"github.com/zach-klippenstein/goadb"
+	"github.com/zach-klippenstein/goadb/util"
 )
+
+type DeviceShellRunner func(cmd string, args ...string) (string, error)
 
 // DeviceClient wraps goadb.DeviceClient for testing.
 type DeviceClient interface {
 	OpenRead(path string) (io.ReadCloser, error)
 	Stat(path string) (*goadb.DirEntry, error)
 	ListDirEntries(path string) (DirEntries, error)
-	RunCommand(cmd string, args ...string) (string, error)
+
+	// ReadLink returns the target of a symlink.
+	// If the target is relative, resolves it using rootPath.
+	ReadLink(path, rootPath string) (string, error, fuse.Status)
 }
 
 // DirEntries wraps goadb.DirEntries for testing.
@@ -28,6 +38,13 @@ type goadbDeviceClient struct {
 	*goadb.DeviceClient
 }
 
+// Error messages returned by the readlink command on Android devices.
+// Should these be moved into goadb instead?
+const (
+	ReadlinkInvalidArgument  = "readlink: Invalid argument"
+	ReadlinkPermissionDenied = "readlink: Permission denied"
+)
+
 func NewGoadbDeviceClientFactory(clientConfig goadb.ClientConfig, deviceSerial string) DeviceClientFactory {
 	deviceDescriptor := goadb.DeviceWithSerial(deviceSerial)
 
@@ -38,4 +55,38 @@ func NewGoadbDeviceClientFactory(clientConfig goadb.ClientConfig, deviceSerial s
 
 func (c goadbDeviceClient) ListDirEntries(path string) (DirEntries, error) {
 	return c.DeviceClient.ListDirEntries(path)
+}
+
+func (c goadbDeviceClient) ReadLink(path, rootPath string) (string, error, fuse.Status) {
+	return readLinkFromDevice(path, rootPath, c.DeviceClient.RunCommand)
+}
+
+// readLinkFromDevice uses runner to execute a readlink command and parses the result.
+func readLinkFromDevice(path, rootPath string, runner DeviceShellRunner) (string, error, fuse.Status) {
+	// The sync protocol doesn't provide a way to read links.
+	// OSX doesn't follow recursive symlinks, so just resolve
+	// all symlinks all the way as a workaround.
+	result, err := runner("readlink", "-f", path)
+	if util.HasErrCode(err, util.DeviceNotFound) {
+		return "", err, fuse.EIO
+	} else if err != nil {
+		return "", err, fuse.EIO
+	}
+	result = strings.TrimSuffix(result, "\r\n")
+
+	// Translate absolute links as relative to this mountpoint.
+	// Don't use path.Abs since we don't want to have platform-specific behavior.
+	if strings.HasPrefix(result, "/") {
+		result = filepath.Join(rootPath, result)
+	}
+
+	if result == ReadlinkInvalidArgument {
+		return "",
+			fmt.Errorf("not a link: readlink returned '%s' reading link: %s", result, path),
+			fuse.EINVAL
+	} else if result == ReadlinkPermissionDenied {
+		return "", nil, fuse.EPERM
+	}
+
+	return result, nil, fuse.OK
 }

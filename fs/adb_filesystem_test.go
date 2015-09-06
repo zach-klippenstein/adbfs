@@ -12,7 +12,7 @@ import (
 	"github.com/zach-klippenstein/goadb"
 )
 
-func TestGetAttrRoot(t *testing.T) {
+func TestGetAttr_Root(t *testing.T) {
 	dev := &MockDeviceClient{
 		&MockDirEntry{&goadb.DirEntry{
 			Name: "/",
@@ -27,7 +27,7 @@ func TestGetAttrRoot(t *testing.T) {
 	assert.NoError(t, err)
 
 	attr, status := fs.GetAttr("", newContext(1, 2, 3))
-	assert.True(t, status.Ok(), "Expected status to be Ok, but was %s", status)
+	assertStatusOk(t, status)
 	assert.NotNil(t, attr)
 
 	assert.Equal(t, uint64(0), attr.Size)
@@ -41,7 +41,7 @@ func TestGetAttrRoot(t *testing.T) {
 	assert.Equal(t, uint32(0755), attr.Mode&uint32(os.ModePerm))
 }
 
-func TestGetAttrRegularFile(t *testing.T) {
+func TestGetAttr_RegularFile(t *testing.T) {
 	dev := &MockDeviceClient{
 		&MockDirEntry{&goadb.DirEntry{
 			Name: "/version.txt",
@@ -56,7 +56,7 @@ func TestGetAttrRegularFile(t *testing.T) {
 	assert.NoError(t, err)
 
 	attr, status := fs.GetAttr("version.txt", newContext(1, 2, 3))
-	assert.True(t, status.Ok(), "Expected status to be Ok, was %s", status)
+	assertStatusOk(t, status)
 	assert.NotNil(t, attr)
 
 	assert.Equal(t, uint64(42), attr.Size)
@@ -110,8 +110,8 @@ func (d *MockDeviceClient) ListDirEntries(path string) (DirEntries, error) {
 	return nil, errors.New("Not implemented")
 }
 
-func (d *MockDeviceClient) RunCommand(cmd string, args ...string) (string, error) {
-	return "", errors.New("Not implemented")
+func (d *MockDeviceClient) ReadLink(path, rootPath string) (string, error, fuse.Status) {
+	return "", errors.New("Not implemented"), fuse.EIO
 }
 
 func (e *MockDirEntries) Next() bool {
@@ -138,4 +138,8 @@ func (e *MockDirEntries) Close() error {
 	e.nextPos = len(e.entries) + 1
 	e.closeCalled = true
 	return e.err
+}
+
+func assertStatusOk(t *testing.T, status fuse.Status) {
+	assert.True(t, status.Ok(), "Expected status to be Ok, was %s", status)
 }

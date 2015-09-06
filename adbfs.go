@@ -49,8 +49,11 @@ func main() {
 	if *mountpoint == "" {
 		log.Fatalln("Mountpoint must be specified. Run with -h.")
 	}
-	absoluteMountpoint, err := resolvePathFromWorkingDir(*mountpoint)
+	absoluteMountpoint, err := filepath.Abs(*mountpoint)
 	if err != nil {
+		log.Fatal(err)
+	}
+	if err = checkValidMountpoint(absoluteMountpoint); err != nil {
 		log.Fatal(err)
 	}
 
@@ -103,6 +106,8 @@ func initializeLogger() {
 
 	log.Formatter = &logrus.TextFormatter{
 		FullTimestamp: true,
+		// RFC 3339 with milliseconds.
+		TimestampFormat: "2006-01-02T15:04:05.000000000Z07:00",
 	}
 
 	// Redirect standard logger (used by fuse) to our logger.
@@ -183,11 +188,15 @@ func handleDeviceDisconnected() {
 	}()
 }
 
-func resolvePathFromWorkingDir(relative string) (string, error) {
-	wd, err := os.Getwd()
+func checkValidMountpoint(path string) error {
+	info, err := os.Stat(path)
 	if err != nil {
-		return "", err
+		return err
 	}
 
-	return filepath.Join(wd, relative), nil
+	if !info.IsDir() {
+		return errors.New(fmt.Sprint("path is not a directory:", path))
+	}
+
+	return nil
 }

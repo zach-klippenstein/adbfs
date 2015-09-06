@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/Sirupsen/logrus"
+	"github.com/hanwen/go-fuse/fuse"
 	"github.com/zach-klippenstein/goadb/util"
 )
 
@@ -33,6 +34,7 @@ type LogEntry struct {
 	startTime time.Time
 	err       error
 	result    string
+	status    string
 }
 
 // StartOperation creates a new LogEntry with the current time.
@@ -70,12 +72,21 @@ func (r *LogEntry) Result(msg string, args ...interface{}) {
 	r.result = result
 }
 
+func (r *LogEntry) Status(status fuse.Status) fuse.Status {
+	if r.status != "" {
+		panic(fmt.Sprintf("status already set to '%s', can't set to '%s'", r.status, status))
+	}
+	r.status = status.String()
+	return status
+}
+
 // FinishOperation should be deferred. It will log the duration of the operation, as well
 // as any results and/or errors.
 func (r *LogEntry) FinishOperation(log *logrus.Logger) {
 	entry := log.WithFields(logrus.Fields{
 		"path":        r.path,
 		"duration_ms": calculateDurationMillis(r.startTime),
+		"status":      r.status,
 	})
 
 	if r.result != "" {

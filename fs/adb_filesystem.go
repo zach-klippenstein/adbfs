@@ -4,8 +4,6 @@ package fs
 import (
 	"fmt"
 	"io/ioutil"
-	"path/filepath"
-	"strings"
 
 	"github.com/Sirupsen/logrus"
 	"github.com/hanwen/go-fuse/fuse"
@@ -32,9 +30,6 @@ type AdbFileSystem struct {
 	// Client pool for short-lived connections (e.g. listing devices, running commands).
 	// Clients for long-lived connections like file transfers should be created as needed.
 	quickUseClientPool chan DeviceClient
-
-	// Number of times to retry operations after backing off.
-	maxRetries int
 }
 
 // Config stores arguments used by AdbFileSystem.
@@ -87,21 +82,18 @@ func (fs *AdbFileSystem) GetAttr(name string, _ *fuse.Context) (attr *fuse.Attr,
 	defer fs.recycleQuickUseClient(device)
 
 	entry, err := device.Stat(name)
-	if util.HasErrCode(err, util.FileNoExistError) {
-		status = fuse.ENOENT
-		logEntry.Result("ENOENT")
-	} else if util.HasErrCode(err, util.DeviceNotFound) {
-		status = fs.handleDeviceNotFound(logEntry)
+	if util.HasErrCode(err, util.DeviceNotFound) {
+		return nil, fs.handleDeviceNotFound(logEntry)
+	} else if util.HasErrCode(err, util.FileNoExistError) {
+		return nil, logEntry.Status(fuse.ENOENT)
 	} else if err != nil {
-		status = fuse.EIO
 		logEntry.Error(err)
-	} else {
-		attr = asFuseAttr(entry)
-		status = fuse.OK
-		logEntry.Result("entry=%v, attr=%v", entry, attr)
+		return nil, logEntry.Status(fuse.EIO)
 	}
 
-	return
+	attr = asFuseAttr(entry)
+	logEntry.Result("entry=%v, attr=%v", entry, attr)
+	return attr, logEntry.Status(fuse.OK)
 }
 
 func (fs *AdbFileSystem) OpenDir(name string, _ *fuse.Context) ([]fuse.DirEntry, fuse.Status) {
@@ -118,7 +110,7 @@ func (fs *AdbFileSystem) OpenDir(name string, _ *fuse.Context) ([]fuse.DirEntry,
 		return nil, fs.handleDeviceNotFound(logEntry)
 	} else if err != nil {
 		logEntry.ErrorMsg(err, "getting directory list")
-		return nil, fuse.EIO
+		return nil, logEntry.Status(fuse.EIO)
 	}
 
 	result, err := asFuseDirEntries(entries)
@@ -126,10 +118,10 @@ func (fs *AdbFileSystem) OpenDir(name string, _ *fuse.Context) ([]fuse.DirEntry,
 		return nil, fs.handleDeviceNotFound(logEntry)
 	} else if err != nil {
 		logEntry.ErrorMsg(err, "reading dir entries")
-		return nil, fuse.EIO
+		return nil, logEntry.Status(fuse.EIO)
 	}
 
-	return result, fuse.OK
+	return result, logEntry.Status(fuse.OK)
 }
 
 func (fs *AdbFileSystem) Readlink(name string, context *fuse.Context) (target string, code fuse.Status) {
@@ -141,30 +133,14 @@ func (fs *AdbFileSystem) Readlink(name string, context *fuse.Context) (target st
 	device := fs.getQuickUseClient()
 	defer fs.recycleQuickUseClient(device)
 
-	// The sync protocol doesn't provide a way to read links.
-	// For some reason OSX doesn't want to follow recursive symlinks, so just resolve
-	// all symlinks all the way as a workaround.
-	result, err := device.RunCommand("readlink", "-f", name)
+	result, err, status := device.ReadLink(name, fs.config.Mountpoint)
 	if util.HasErrCode(err, util.DeviceNotFound) {
 		return "", fs.handleDeviceNotFound(logEntry)
 	} else if err != nil {
-		logEntry.ErrorMsg(err, "reading link")
-		return "", fuse.EIO
-	}
-	result = strings.TrimSuffix(result, "\r\n")
-
-	// Translate absolute links as relative to this mountpoint.
-	if strings.HasPrefix(result, "/") {
-		result = filepath.Join(fs.config.Mountpoint, result)
+		logEntry.Error(err)
 	}
 
-	if result == "readlink: Invalid argument" {
-		logEntry.Error(fmt.Errorf("not a link: readlink returned '%s'", result))
-	} else {
-		logEntry.Result("%s", result)
-	}
-
-	return result, fuse.OK
+	return result, logEntry.Status(status)
 }
 
 func (fs *AdbFileSystem) Open(name string, flags uint32, context *fuse.Context) (file nodefs.File, code fuse.Status) {
@@ -184,7 +160,7 @@ func (fs *AdbFileSystem) Open(name string, flags uint32, context *fuse.Context) 
 		return nil, fs.handleDeviceNotFound(logEntry)
 	} else if err != nil {
 		logEntry.ErrorMsg(err, "opening file stream on device")
-		return nil, fuse.EIO
+		return nil, logEntry.Status(fuse.EIO)
 	}
 	defer stream.Close()
 
@@ -193,7 +169,7 @@ func (fs *AdbFileSystem) Open(name string, flags uint32, context *fuse.Context) 
 		return nil, fs.handleDeviceNotFound(logEntry)
 	} else if err != nil {
 		logEntry.ErrorMsg(err, "reading data from file")
-		return nil, fuse.EIO
+		return nil, logEntry.Status(fuse.EIO)
 	}
 
 	logEntry.Result("read %d bytes", len(data))
@@ -201,7 +177,7 @@ func (fs *AdbFileSystem) Open(name string, flags uint32, context *fuse.Context) 
 	file = nodefs.NewDataFile(data)
 	file = newLoggingFile(file, fs.config.Log)
 
-	return file, fuse.OK
+	return file, logEntry.Status(fuse.OK)
 }
 
 func (fs *AdbFileSystem) getNewClient() (client DeviceClient) {
@@ -223,7 +199,7 @@ func (fs *AdbFileSystem) handleDeviceNotFound(logEntry *LogEntry) fuse.Status {
 	if fs.config.DeviceNotFoundHandler != nil {
 		fs.config.DeviceNotFoundHandler()
 	}
-	return fuse.EIO
+	return logEntry.Status(fuse.EIO)
 }
 
 func convertClientPathToDevicePath(name string) string {
