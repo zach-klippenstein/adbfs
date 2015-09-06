@@ -46,6 +46,9 @@ type Config struct {
 	ClientFactory DeviceClientFactory
 
 	Log *logrus.Logger
+
+	// If non-nil, called when a util.Err with code DeviceNotFound is returned.
+	DeviceNotFoundHandler func()
 }
 
 type DeviceClientFactory func() DeviceClient
@@ -87,6 +90,8 @@ func (fs *AdbFileSystem) GetAttr(name string, _ *fuse.Context) (attr *fuse.Attr,
 	if util.HasErrCode(err, util.FileNoExistError) {
 		status = fuse.ENOENT
 		logEntry.Result("ENOENT")
+	} else if util.HasErrCode(err, util.DeviceNotFound) {
+		status = fs.handleDeviceNotFound(logEntry)
 	} else if err != nil {
 		status = fuse.EIO
 		logEntry.Error(err)
@@ -109,13 +114,17 @@ func (fs *AdbFileSystem) OpenDir(name string, _ *fuse.Context) ([]fuse.DirEntry,
 	defer fs.recycleQuickUseClient(device)
 
 	entries, err := device.ListDirEntries(name)
-	if err != nil {
+	if util.HasErrCode(err, util.DeviceNotFound) {
+		return nil, fs.handleDeviceNotFound(logEntry)
+	} else if err != nil {
 		logEntry.ErrorMsg(err, "getting directory list")
 		return nil, fuse.EIO
 	}
 
 	result, err := asFuseDirEntries(entries)
-	if err != nil {
+	if util.HasErrCode(err, util.DeviceNotFound) {
+		return nil, fs.handleDeviceNotFound(logEntry)
+	} else if err != nil {
 		logEntry.ErrorMsg(err, "reading dir entries")
 		return nil, fuse.EIO
 	}
@@ -136,7 +145,9 @@ func (fs *AdbFileSystem) Readlink(name string, context *fuse.Context) (target st
 	// For some reason OSX doesn't want to follow recursive symlinks, so just resolve
 	// all symlinks all the way as a workaround.
 	result, err := device.RunCommand("readlink", "-f", name)
-	if err != nil {
+	if util.HasErrCode(err, util.DeviceNotFound) {
+		return "", fs.handleDeviceNotFound(logEntry)
+	} else if err != nil {
 		logEntry.ErrorMsg(err, "reading link")
 		return "", fuse.EIO
 	}
@@ -169,14 +180,18 @@ func (fs *AdbFileSystem) Open(name string, flags uint32, context *fuse.Context) 
 
 	// TODO: Temporary dev implementation: read entire file into memory.
 	stream, err := client.OpenRead(name)
-	if err != nil {
+	if util.HasErrCode(err, util.DeviceNotFound) {
+		return nil, fs.handleDeviceNotFound(logEntry)
+	} else if err != nil {
 		logEntry.ErrorMsg(err, "opening file stream on device")
 		return nil, fuse.EIO
 	}
 	defer stream.Close()
 
 	data, err := ioutil.ReadAll(stream)
-	if err != nil {
+	if util.HasErrCode(err, util.DeviceNotFound) {
+		return nil, fs.handleDeviceNotFound(logEntry)
+	} else if err != nil {
 		logEntry.ErrorMsg(err, "reading data from file")
 		return nil, fuse.EIO
 	}
@@ -201,6 +216,14 @@ func (fs *AdbFileSystem) getQuickUseClient() DeviceClient {
 
 func (fs *AdbFileSystem) recycleQuickUseClient(client DeviceClient) {
 	fs.quickUseClientPool <- client
+}
+
+func (fs *AdbFileSystem) handleDeviceNotFound(logEntry *LogEntry) fuse.Status {
+	logEntry.Result("device disconnected")
+	if fs.config.DeviceNotFoundHandler != nil {
+		fs.config.DeviceNotFoundHandler()
+	}
+	return fuse.EIO
 }
 
 func convertClientPathToDevicePath(name string) string {

@@ -28,10 +28,7 @@ type goadbDeviceClient struct {
 	*goadb.DeviceClient
 }
 
-func NewGoadbDeviceClientFactory(adbPort int, deviceSerial string) DeviceClientFactory {
-	clientConfig := goadb.ClientConfig{
-		Dialer: goadb.NewDialer("", adbPort),
-	}
+func NewGoadbDeviceClientFactory(clientConfig goadb.ClientConfig, deviceSerial string) DeviceClientFactory {
 	deviceDescriptor := goadb.DeviceWithSerial(deviceSerial)
 
 	return func() DeviceClient {

@@ -28,9 +28,15 @@ var (
 	logLevel     = flag.String("loglevel", "info", "Detail of logs to show.")
 )
 
+var (
+	server    *fuse.Server
+	log       *logrus.Logger
+	unmounted bool
+)
+
 func main() {
 	flag.Parse()
-	log := initializeLogger()
+	initializeLogger()
 
 	if *mountpoint == "" {
 		log.Fatalln("Mountpoint must be specified. Run with -h.")
@@ -40,26 +46,33 @@ func main() {
 		log.Fatal(err)
 	}
 
-	fs := initializeFileSystem(absoluteMountpoint, log)
+	clientConfig := goadb.ClientConfig{
+		Dialer: goadb.NewDialer("", *adbPort),
+	}
 
-	server, _, err := nodefs.MountRoot(absoluteMountpoint, fs.Root(), nil)
+	fs := initializeFileSystem(clientConfig, absoluteMountpoint, handleDeviceDisconnected)
+
+	server, _, err = nodefs.MountRoot(absoluteMountpoint, fs.Root(), nil)
 	if err != nil {
 		log.Fatal(err)
 	}
 	log.Printf("mounted %s on %s", *deviceSerial, absoluteMountpoint)
-	defer func() {
-		log.Println("unmounting...")
-		server.Unmount()
-		log.Println("unmounted.")
-	}()
+	defer unmountServer()
 
-	serverDone := startServer(server, log)
+	serverDone := startServer()
 
 	signals := make(chan os.Signal, 1)
 	signal.Notify(signals, os.Interrupt, os.Kill)
 
+	deviceWatcher, _ := goadb.NewDeviceWatcher(clientConfig)
+
 	for {
 		select {
+		case event := <-deviceWatcher.C():
+			if event.Serial == *deviceSerial && event.NewState == "offline" {
+				handleDeviceDisconnected()
+			}
+
 		case signal := <-signals:
 			log.Println("got signal", signal)
 			switch signal {
@@ -74,7 +87,7 @@ func main() {
 	}
 }
 
-func initializeLogger() (log *logrus.Logger) {
+func initializeLogger() {
 	log = logrus.StandardLogger()
 
 	logLevel, err := logrus.ParseLevel(*logLevel)
@@ -90,14 +103,15 @@ func initializeLogger() (log *logrus.Logger) {
 	return
 }
 
-func initializeFileSystem(mountpoint string, log *logrus.Logger) *pathfs.PathNodeFs {
-	clientFactory := fs.NewGoadbDeviceClientFactory(*adbPort, *deviceSerial)
+func initializeFileSystem(clientConfig goadb.ClientConfig, mountpoint string, deviceNotFoundHandler func()) *pathfs.PathNodeFs {
+	clientFactory := fs.NewGoadbDeviceClientFactory(clientConfig, *deviceSerial)
 
 	var fsImpl pathfs.FileSystem
 	fsImpl, err := fs.NewAdbFileSystem(fs.Config{
 		Mountpoint:    mountpoint,
 		ClientFactory: clientFactory,
 		Log:           log,
+		DeviceNotFoundHandler: deviceNotFoundHandler,
 	})
 	if err != nil {
 		log.Fatal(err)
@@ -106,7 +120,7 @@ func initializeFileSystem(mountpoint string, log *logrus.Logger) *pathfs.PathNod
 	return pathfs.NewPathNodeFs(fsImpl, nil)
 }
 
-func startServer(server *fuse.Server, log *logrus.Logger) <-chan struct{} {
+func startServer() <-chan struct{} {
 	serverDone := make(chan struct{}, 1)
 	go func() {
 		defer close(serverDone)
@@ -120,6 +134,27 @@ func startServer(server *fuse.Server, log *logrus.Logger) <-chan struct{} {
 	log.Println("server ready.")
 
 	return serverDone
+}
+
+func unmountServer() {
+	if server == nil {
+		panic("attempted to unmount server before creating it")
+	}
+
+	if !unmounted {
+		unmounted = true
+		log.Println("unmounting...")
+		server.Unmount()
+		log.Println("unmounted.")
+	}
+}
+
+func handleDeviceDisconnected() {
+	// Server guaranteed to be non-nil by now, since we can't detect
+	// device disconnection without a filesystem op, which can't happen
+	// until the server has started.
+	log.Infoln("device disconnected, unmounting...")
+	unmountServer()
 }
 
 func resolvePathFromWorkingDir(relative string) (string, error) {
