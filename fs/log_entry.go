@@ -34,6 +34,7 @@ Example Usage
 type LogEntry struct {
 	name      string
 	path      string
+	args      string
 	startTime time.Time
 	err       error
 	result    string
@@ -49,6 +50,14 @@ func StartOperation(name string, path string) *LogEntry {
 	return &LogEntry{
 		name:      name,
 		path:      path,
+		startTime: time.Now(),
+	}
+}
+
+func StartFileOperation(name string, args string) *LogEntry {
+	return &LogEntry{
+		name:      "File " + name,
+		args:      args,
 		startTime: time.Now(),
 	}
 }
@@ -100,15 +109,19 @@ func (r *LogEntry) CacheUsed(hit bool) {
 // as any results and/or errors.
 func (r *LogEntry) FinishOperation(log *logrus.Logger) {
 	entry := log.WithFields(logrus.Fields{
-		"path":        r.path,
 		"duration_ms": calculateDurationMillis(r.startTime),
 		"status":      r.status,
 	})
 
+	if r.path != "" {
+		entry = entry.WithField("path", r.path)
+	}
+	if r.args != "" {
+		entry = entry.WithField("args", r.args)
+	}
 	if r.result != "" {
 		entry = entry.WithField("result", r.result)
 	}
-
 	if r.cacheUsed {
 		entry = entry.WithField("cache_hit", r.cacheHit)
 	}

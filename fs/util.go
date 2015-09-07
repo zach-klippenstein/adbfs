@@ -1,6 +1,7 @@
 package fs
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"sync/atomic"
@@ -75,28 +76,52 @@ func osFileModeToFuseFileMode(inMode os.FileMode) (outMode uint32) {
 
 // newLoggingFile returns a file object that logs all operations performed on it.
 func newLoggingFile(file nodefs.File, log *logrus.Logger) nodefs.File {
+	formatList := func(list []interface{}) string {
+		if len(list) == 0 {
+			return ""
+		}
+
+		var buffer bytes.Buffer
+		buffer.WriteRune('[')
+		for i, item := range list {
+			fmt.Fprintf(&buffer, "%#v", item)
+
+			if i < len(list)-1 {
+				buffer.WriteString(", ")
+			}
+		}
+		buffer.WriteRune(']')
+		return buffer.String()
+	}
+
 	return &WrappingFile{
 		File: file,
-		AfterCall: func(f *WrappingFile, method string, args, results []interface{}) {
-			summarizeByteSlicesForLog(args)
-			summarizeByteSlicesForLog(results)
+		BeforeCall: func(f *WrappingFile, method string, args ...interface{}) interface{} {
+			summarizeForLog(args)
+			return StartFileOperation(method, formatList(args))
+		},
+		AfterCall: func(f *WrappingFile, call interface{}, status *fuse.Status, results ...interface{}) {
+			summarizeForLog(results)
 
-			log.WithFields(logrus.Fields{
-				"file":      f.File,
-				"operation": method,
-				"args":      fmt.Sprintf("%+v", args),
-				"results":   fmt.Sprintf("%+v", results),
-			}).Debug()
+			logEntry := call.(*LogEntry)
+			if status != nil {
+				logEntry.Status(*status)
+			}
+			logEntry.Result(formatList(results))
+			logEntry.FinishOperation(log)
 		},
 	}
 }
 
 // summarizeByteSlices replaces all elements of the passed slice that are of type []byte with
 // their length and type, so for logging they neither show sensitive data nor flood the log.
-func summarizeByteSlicesForLog(vals []interface{}) {
+func summarizeForLog(vals []interface{}) {
 	for i, val := range vals {
-		if slice, ok := val.([]byte); ok {
-			vals[i] = fmt.Sprintf("[]byte(%d)", len(slice))
+		switch val := val.(type) {
+		case []byte:
+			vals[i] = fmt.Sprintf("[]byte(%d)", len(val))
+		case fuse.ReadResult:
+			vals[i] = fmt.Sprintf("fuse.ReadResult(%d)", val.Size())
 		}
 	}
 }

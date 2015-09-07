@@ -40,7 +40,7 @@ func TestSummarizeByteSlicesForLog(t *testing.T) {
 		42,
 	}
 
-	summarizeByteSlicesForLog(vals)
+	summarizeForLog(vals)
 
 	assert.Equal(t, "foo", vals[0])
 	assert.Equal(t, []interface{}{
@@ -61,13 +61,14 @@ func TestLoggingFile(t *testing.T) {
 
 	file := newLoggingFile(nodefs.NewDataFile([]byte{}), log)
 	code := file.Fsync(flags)
+	assert.False(t, code.Ok())
 
 	var output map[string]interface{}
 	assert.NoError(t, json.Unmarshal(logOut.Bytes(), &output))
 
-	assert.False(t, code.Ok())
-	assert.Equal(t, "Fsync", output["operation"])
+	assert.NotEmpty(t, output["status"])
+	assert.Equal(t, "File Fsync", output["msg"])
+	assert.True(t, output["duration_ms"].(float64) >= 0)
 	assert.Equal(t, "[42]", output["args"])
-	assert.NotEmpty(t, output["results"].(string))
 	assert.NotEmpty(t, output["time"])
 }
