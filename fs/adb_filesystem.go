@@ -42,6 +42,11 @@ type Config struct {
 
 	Log *logrus.Logger
 
+	// Maximum number of concurrent connections for short-lived connections (does not restrict
+	// the number of concurrently open files).
+	// Values <1 are treated as 1.
+	ConnectionPoolSize int
+
 	// If non-nil, called when a util.Err with code DeviceNotFound is returned.
 	DeviceNotFoundHandler func()
 }
@@ -51,7 +56,12 @@ type DeviceClientFactory func() DeviceClient
 var _ pathfs.FileSystem = &AdbFileSystem{}
 
 func NewAdbFileSystem(config Config) (fs pathfs.FileSystem, err error) {
-	clientPool := make(chan DeviceClient, 1)
+	if config.ConnectionPoolSize < 1 {
+		config.ConnectionPoolSize = 1
+	}
+	config.Log.Infoln("connection pool size:", config.ConnectionPoolSize)
+
+	clientPool := make(chan DeviceClient, config.ConnectionPoolSize)
 	clientPool <- config.ClientFactory()
 
 	if config.Log == nil {

@@ -26,11 +26,12 @@ import (
 )
 
 var (
-	deviceSerial = flag.String("device", "", "Device serial number to mount.")
-	mountpoint   = flag.String("mountpoint", "", "Directory to mount the device on.")
-	adbPort      = flag.Int("port", goadb.AdbPort, "Port to connect to adb server on.")
-	logLevel     = flag.String("loglevel", "info", "Detail of logs to show.")
-	cacheTtl     = flag.Duration("cachettl", 300*time.Millisecond, "Duration to keep cached file info.")
+	deviceSerial       = flag.String("device", "", "Device serial number to mount.")
+	mountpoint         = flag.String("mountpoint", "", "Directory to mount the device on.")
+	adbPort            = flag.Int("port", goadb.AdbPort, "Port to connect to adb server on.")
+	connectionPoolSize = flag.Int("poolsize", 2, "Size of the connection pool. Not used for open files.")
+	logLevel           = flag.String("loglevel", "info", "Detail of logs to show.")
+	cacheTtl           = flag.Duration("cachettl", 300*time.Millisecond, "Duration to keep cached file info.")
 )
 
 var (
@@ -132,9 +133,10 @@ func initializeFileSystem(clientConfig goadb.ClientConfig, mountpoint string, ca
 
 	var fsImpl pathfs.FileSystem
 	fsImpl, err := fs.NewAdbFileSystem(fs.Config{
-		Mountpoint:    mountpoint,
-		ClientFactory: clientFactory,
-		Log:           log,
+		Mountpoint:            mountpoint,
+		ClientFactory:         clientFactory,
+		Log:                   log,
+		ConnectionPoolSize:    *connectionPoolSize,
 		DeviceNotFoundHandler: deviceNotFoundHandler,
 	})
 	if err != nil {
