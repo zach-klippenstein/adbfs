@@ -1,9 +1,6 @@
 package fs
 
 import (
-	"errors"
-	"fmt"
-	"io"
 	"os"
 	"testing"
 
@@ -13,12 +10,14 @@ import (
 )
 
 func TestGetAttr_Root(t *testing.T) {
-	dev := &MockDeviceClient{
-		&MockDirEntry{&goadb.DirEntry{
-			Name: "/",
-			Size: 0,
-			Mode: os.ModeDir | 0755,
-		}},
+	dev := &delegateDeviceClient{
+		stat: func(path string, log *LogEntry) (*goadb.DirEntry, error) {
+			return &goadb.DirEntry{
+				Name: "/",
+				Size: 0,
+				Mode: os.ModeDir | 0755,
+			}, nil
+		},
 	}
 	fs, err := NewAdbFileSystem(Config{
 		Mountpoint:    "",
@@ -42,12 +41,14 @@ func TestGetAttr_Root(t *testing.T) {
 }
 
 func TestGetAttr_RegularFile(t *testing.T) {
-	dev := &MockDeviceClient{
-		&MockDirEntry{&goadb.DirEntry{
-			Name: "/version.txt",
-			Size: 42,
-			Mode: 0444,
-		}},
+	dev := &delegateDeviceClient{
+		stat: func(path string, log *LogEntry) (*goadb.DirEntry, error) {
+			return &goadb.DirEntry{
+				Name: "/version.txt",
+				Size: 42,
+				Mode: 0444,
+			}, nil
+		},
 	}
 	fs, err := NewAdbFileSystem(Config{
 		Mountpoint:    "",
@@ -78,33 +79,6 @@ func newContext(uid, gid, pid int) *fuse.Context {
 		},
 		Pid: uint32(pid),
 	}
-}
-
-type MockDeviceClient struct {
-	Root *MockDirEntry
-}
-
-type MockDirEntry struct {
-	*goadb.DirEntry
-}
-
-func (d *MockDeviceClient) OpenRead(path string) (io.ReadCloser, error) {
-	return nil, nil
-}
-
-func (d *MockDeviceClient) Stat(path string) (*goadb.DirEntry, error) {
-	if path == d.Root.Name {
-		return d.Root.DirEntry, nil
-	}
-	return nil, fmt.Errorf("Path does not exist: %s", path)
-}
-
-func (d *MockDeviceClient) ListDirEntries(path string) ([]*goadb.DirEntry, error) {
-	return nil, errors.New("Not implemented")
-}
-
-func (d *MockDeviceClient) ReadLink(path, rootPath string) (string, error, fuse.Status) {
-	return "", errors.New("Not implemented"), fuse.EIO
 }
 
 func assertStatusOk(t *testing.T, status fuse.Status) {

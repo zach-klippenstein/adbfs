@@ -81,7 +81,7 @@ func (fs *AdbFileSystem) GetAttr(name string, _ *fuse.Context) (attr *fuse.Attr,
 	device := fs.getQuickUseClient()
 	defer fs.recycleQuickUseClient(device)
 
-	entry, err := device.Stat(name)
+	entry, err := device.Stat(name, logEntry)
 	if util.HasErrCode(err, util.DeviceNotFound) {
 		return nil, fs.handleDeviceNotFound(logEntry)
 	} else if util.HasErrCode(err, util.FileNoExistError) {
@@ -105,7 +105,7 @@ func (fs *AdbFileSystem) OpenDir(name string, _ *fuse.Context) ([]fuse.DirEntry,
 	device := fs.getQuickUseClient()
 	defer fs.recycleQuickUseClient(device)
 
-	entries, err := device.ListDirEntries(name)
+	entries, err := device.ListDirEntries(name, logEntry)
 	if util.HasErrCode(err, util.DeviceNotFound) {
 		return nil, fs.handleDeviceNotFound(logEntry)
 	} else if err != nil {
@@ -126,13 +126,14 @@ func (fs *AdbFileSystem) Readlink(name string, context *fuse.Context) (target st
 	device := fs.getQuickUseClient()
 	defer fs.recycleQuickUseClient(device)
 
-	result, err, status := device.ReadLink(name, fs.config.Mountpoint)
+	result, err, status := device.ReadLink(name, fs.config.Mountpoint, logEntry)
 	if util.HasErrCode(err, util.DeviceNotFound) {
 		return "", fs.handleDeviceNotFound(logEntry)
 	} else if err != nil {
 		logEntry.Error(err)
 	}
 
+	logEntry.Result("%s", result)
 	return result, logEntry.Status(status)
 }
 
@@ -148,7 +149,7 @@ func (fs *AdbFileSystem) Open(name string, flags uint32, context *fuse.Context) 
 	client := fs.getNewClient()
 
 	// TODO: Temporary dev implementation: read entire file into memory.
-	stream, err := client.OpenRead(name)
+	stream, err := client.OpenRead(name, logEntry)
 	if util.HasErrCode(err, util.DeviceNotFound) {
 		return nil, fs.handleDeviceNotFound(logEntry)
 	} else if err != nil {

@@ -11,10 +11,13 @@ import (
 
 /*
 LogEntry reports results, errors, and statistics for an individual operation.
+Each method can only be called once, and will panic on subsequent calls.
+
+If an error is reported, it is logged as a separate entry.
 
 Example Usage
 
-	func DoTheThing(path string) error {
+	func DoTheThing(path string) fuse.Status {
 		logEntry := StartOperation("DoTheThing", path)
 		defer FinishOperation(log) // Where log is a logrus logger.
 
@@ -25,7 +28,7 @@ Example Usage
 		}
 
 		logEntry.Result(result)
-		return nil
+		return logEntry.Status(fuse.OK)
 	}
 */
 type LogEntry struct {
@@ -35,6 +38,9 @@ type LogEntry struct {
 	err       error
 	result    string
 	status    string
+
+	cacheUsed bool
+	cacheHit  bool
 }
 
 // StartOperation creates a new LogEntry with the current time.
@@ -72,12 +78,22 @@ func (r *LogEntry) Result(msg string, args ...interface{}) {
 	r.result = result
 }
 
+// Status records the fuse.Status result of an operation.
 func (r *LogEntry) Status(status fuse.Status) fuse.Status {
 	if r.status != "" {
 		panic(fmt.Sprintf("status already set to '%s', can't set to '%s'", r.status, status))
 	}
 	r.status = status.String()
 	return status
+}
+
+// CacheUsed records that a cache was used to attempt to retrieve a result.
+func (r *LogEntry) CacheUsed(hit bool) {
+	if r.cacheUsed {
+		panic(fmt.Sprintf("cache use already reported"))
+	}
+	r.cacheUsed = true
+	r.cacheHit = hit
 }
 
 // FinishOperation should be deferred. It will log the duration of the operation, as well
@@ -92,6 +108,11 @@ func (r *LogEntry) FinishOperation(log *logrus.Logger) {
 	if r.result != "" {
 		entry = entry.WithField("result", r.result)
 	}
+
+	if r.cacheUsed {
+		entry = entry.WithField("cache_hit", r.cacheHit)
+	}
+
 	entry.Debug(r.name)
 
 	if r.err != nil {

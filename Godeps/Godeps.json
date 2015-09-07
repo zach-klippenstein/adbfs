@@ -12,6 +12,10 @@
 			"Rev": "324ea173d0a4d90e0e97c464a6ad33f80c9587a8"
 		},
 		{
+			"ImportPath": "github.com/pmylund/go-cache",
+			"Rev": "93d85800f2fa6bd0a739e7bd612bfa3bc008b72d"
+		},
+		{
 			"ImportPath": "github.com/zach-klippenstein/goadb",
 			"Rev": "bdf8f854c38c98fe17cb07e325de29125f005d2c"
 		}

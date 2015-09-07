@@ -30,13 +30,14 @@ var (
 	mountpoint   = flag.String("mountpoint", "", "Directory to mount the device on.")
 	adbPort      = flag.Int("port", goadb.AdbPort, "Port to connect to adb server on.")
 	logLevel     = flag.String("loglevel", "info", "Detail of logs to show.")
+	cacheTtl     = flag.Duration("cachettl", 300*time.Millisecond, "Duration to keep cached file info.")
 )
 
 var (
 	server *fuse.Server
 	log    *logrus.Logger
 
-	// Accessed through atomic operations.
+	// Prevents trying to unmount the server multiple times.
 	unmounted fs.AtomicBool
 )
 
@@ -57,11 +58,13 @@ func main() {
 		log.Fatal(err)
 	}
 
+	cache := initializeCache(*cacheTtl)
+
 	clientConfig := goadb.ClientConfig{
 		Dialer: goadb.NewDialer("", *adbPort),
 	}
 
-	fs := initializeFileSystem(clientConfig, absoluteMountpoint, handleDeviceDisconnected)
+	fs := initializeFileSystem(clientConfig, absoluteMountpoint, cache, handleDeviceDisconnected)
 
 	server, _, err = nodefs.MountRoot(absoluteMountpoint, fs.Root(), nil)
 	if err != nil {
@@ -118,8 +121,14 @@ func initializeLogger() {
 	return
 }
 
-func initializeFileSystem(clientConfig goadb.ClientConfig, mountpoint string, deviceNotFoundHandler func()) *pathfs.PathNodeFs {
-	clientFactory := fs.NewGoadbDeviceClientFactory(clientConfig, *deviceSerial)
+func initializeCache(ttl time.Duration) fs.DirEntryCache {
+	log.Infoln("stat cache ttl:", ttl)
+	return fs.NewDirEntryCache(ttl)
+}
+
+func initializeFileSystem(clientConfig goadb.ClientConfig, mountpoint string, cache fs.DirEntryCache, deviceNotFoundHandler func()) *pathfs.PathNodeFs {
+	clientFactory := fs.NewCachingDeviceClientFactory(cache,
+		fs.NewGoadbDeviceClientFactory(clientConfig, *deviceSerial))
 
 	var fsImpl pathfs.FileSystem
 	fsImpl, err := fs.NewAdbFileSystem(fs.Config{

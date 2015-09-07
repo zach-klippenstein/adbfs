@@ -15,13 +15,13 @@ type DeviceShellRunner func(cmd string, args ...string) (string, error)
 
 // DeviceClient wraps goadb.DeviceClient for testing.
 type DeviceClient interface {
-	OpenRead(path string) (io.ReadCloser, error)
-	Stat(path string) (*goadb.DirEntry, error)
-	ListDirEntries(path string) ([]*goadb.DirEntry, error)
+	OpenRead(path string, log *LogEntry) (io.ReadCloser, error)
+	Stat(path string, log *LogEntry) (*goadb.DirEntry, error)
+	ListDirEntries(path string, log *LogEntry) ([]*goadb.DirEntry, error)
 
 	// ReadLink returns the target of a symlink.
 	// If the target is relative, resolves it using rootPath.
-	ReadLink(path, rootPath string) (string, error, fuse.Status)
+	ReadLink(path, rootPath string, log *LogEntry) (string, error, fuse.Status)
 }
 
 // goadbDeviceClient is an implementation of DeviceClient that wraps
@@ -45,7 +45,15 @@ func NewGoadbDeviceClientFactory(clientConfig goadb.ClientConfig, deviceSerial s
 	}
 }
 
-func (c goadbDeviceClient) ListDirEntries(path string) ([]*goadb.DirEntry, error) {
+func (c goadbDeviceClient) OpenRead(path string, _ *LogEntry) (io.ReadCloser, error) {
+	return c.DeviceClient.OpenRead(path)
+}
+
+func (c goadbDeviceClient) Stat(path string, _ *LogEntry) (*goadb.DirEntry, error) {
+	return c.DeviceClient.Stat(path)
+}
+
+func (c goadbDeviceClient) ListDirEntries(path string, _ *LogEntry) ([]*goadb.DirEntry, error) {
 	entries, err := c.DeviceClient.ListDirEntries(path)
 	if err != nil {
 		return nil, err
@@ -53,7 +61,7 @@ func (c goadbDeviceClient) ListDirEntries(path string) ([]*goadb.DirEntry, error
 	return entries.ReadAll()
 }
 
-func (c goadbDeviceClient) ReadLink(path, rootPath string) (string, error, fuse.Status) {
+func (c goadbDeviceClient) ReadLink(path, rootPath string, _ *LogEntry) (string, error, fuse.Status) {
 	return readLinkFromDevice(path, rootPath, c.DeviceClient.RunCommand)
 }
 

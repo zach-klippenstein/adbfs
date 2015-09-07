@@ -1,11 +1,36 @@
 package fs
 
 import (
+	"io"
 	"testing"
 
 	"github.com/hanwen/go-fuse/fuse"
 	"github.com/stretchr/testify/assert"
+	"github.com/zach-klippenstein/goadb"
 )
+
+type delegateDeviceClient struct {
+	openRead       func(path string, log *LogEntry) (io.ReadCloser, error)
+	stat           func(path string, log *LogEntry) (*goadb.DirEntry, error)
+	listDirEntries func(path string, log *LogEntry) ([]*goadb.DirEntry, error)
+	readLink       func(path, rootPath string, log *LogEntry) (string, error, fuse.Status)
+}
+
+func (c *delegateDeviceClient) OpenRead(path string, log *LogEntry) (io.ReadCloser, error) {
+	return c.openRead(path, log)
+}
+
+func (c *delegateDeviceClient) Stat(path string, log *LogEntry) (*goadb.DirEntry, error) {
+	return c.stat(path, log)
+}
+
+func (c *delegateDeviceClient) ListDirEntries(path string, log *LogEntry) ([]*goadb.DirEntry, error) {
+	return c.listDirEntries(path, log)
+}
+
+func (c *delegateDeviceClient) ReadLink(path, rootPath string, log *LogEntry) (string, error, fuse.Status) {
+	return c.readLink(path, rootPath, log)
+}
 
 func TestReadLinkFromDevice_AbsoluteTarget(t *testing.T) {
 	target, err, status := readLinkFromDevice("version_link.txt", "/foo/bar",
