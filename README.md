@@ -1,6 +1,4 @@
-# adbfs
-
-[![GoDoc](https://godoc.org/github.com/zach-klippenstein/adbfs?status.svg)](https://godoc.org/github.com/zach-klippenstein/adbfs/fs)
+# adbfs [![GoDoc](https://godoc.org/github.com/zach-klippenstein/adbfs?status.svg)](https://godoc.org/github.com/zach-klippenstein/adbfs/fs)
 
 NOTE: Travis build is currently broken, since fusermount doesn't exist on the build nodes. May need to move off Travis to get them working.
 
