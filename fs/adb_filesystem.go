@@ -56,6 +56,10 @@ type DeviceClientFactory func() DeviceClient
 var _ pathfs.FileSystem = &AdbFileSystem{}
 
 func NewAdbFileSystem(config Config) (fs pathfs.FileSystem, err error) {
+	if config.Log == nil {
+		panic("no logger specified for filesystem")
+	}
+
 	if config.ConnectionPoolSize < 1 {
 		config.ConnectionPoolSize = 1
 	}

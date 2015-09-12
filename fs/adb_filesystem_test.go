@@ -4,6 +4,7 @@ import (
 	"os"
 	"testing"
 
+	"github.com/Sirupsen/logrus"
 	"github.com/hanwen/go-fuse/fuse"
 	"github.com/stretchr/testify/assert"
 	"github.com/zach-klippenstein/goadb"
@@ -22,6 +23,7 @@ func TestGetAttr_Root(t *testing.T) {
 	fs, err := NewAdbFileSystem(Config{
 		Mountpoint:    "",
 		ClientFactory: func() DeviceClient { return dev },
+		Log:           logrus.StandardLogger(),
 	})
 	assert.NoError(t, err)
 
@@ -53,6 +55,7 @@ func TestGetAttr_RegularFile(t *testing.T) {
 	fs, err := NewAdbFileSystem(Config{
 		Mountpoint:    "",
 		ClientFactory: func() DeviceClient { return dev },
+		Log:           logrus.StandardLogger(),
 	})
 	assert.NoError(t, err)
 
