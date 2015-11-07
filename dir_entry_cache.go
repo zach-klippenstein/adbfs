@@ -4,6 +4,7 @@ import (
 	"time"
 
 	cache "github.com/pmylund/go-cache"
+	"golang.org/x/net/trace"
 )
 
 const CachePurgeInterval = 5 * time.Minute
@@ -17,10 +18,16 @@ type DirEntryCache interface {
 	Get(path string) (entries *CachedDirEntries, found bool)
 }
 
-type realDirEntryCache cache.Cache
+type realDirEntryCache struct {
+	cache    *cache.Cache
+	eventLog trace.EventLog
+}
 
 func NewDirEntryCache(ttl time.Duration) DirEntryCache {
-	return (*realDirEntryCache)(cache.New(ttl, CachePurgeInterval))
+	return &realDirEntryCache{
+		cache:    cache.New(ttl, CachePurgeInterval),
+		eventLog: trace.NewEventLog("DirEntryCache", ""),
+	}
 }
 
 func (c *realDirEntryCache) GetOrLoad(path string, loader DirEntryLoader) (*CachedDirEntries, error, bool) {
@@ -33,13 +40,15 @@ func (c *realDirEntryCache) GetOrLoad(path string, loader DirEntryLoader) (*Cach
 		return nil, err, false
 	}
 
-	c.Set(path, entries, cache.DefaultExpiration)
+	c.cache.Set(path, entries, cache.DefaultExpiration)
 	return entries, nil, false
 }
 
 func (c *realDirEntryCache) Get(path string) (*CachedDirEntries, bool) {
-	if entries, found := (*cache.Cache)(c).Get(path); found {
+	if entries, found := c.cache.Get(path); found {
+		c.eventLog.Printf("Get(%s) = hit", path)
 		return entries.(*CachedDirEntries), true
 	}
+	c.eventLog.Errorf("Get(%s) = miss", path)
 	return nil, false
 }

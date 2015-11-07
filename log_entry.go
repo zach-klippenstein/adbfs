@@ -2,11 +2,13 @@ package adbfs
 
 import (
 	"fmt"
+	"os"
 	"time"
 
 	"github.com/Sirupsen/logrus"
 	"github.com/hanwen/go-fuse/fuse"
 	"github.com/zach-klippenstein/goadb/util"
+	"golang.org/x/net/trace"
 )
 
 /*
@@ -40,9 +42,13 @@ type LogEntry struct {
 	result    string
 	status    string
 
+	trace trace.Trace
+
 	cacheUsed bool
 	cacheHit  bool
 }
+
+var traceEntryFormatter = new(logrus.JSONFormatter)
 
 // StartOperation creates a new LogEntry with the current time.
 // Should be immediately followed by a deferred call to FinishOperation.
@@ -51,14 +57,17 @@ func StartOperation(name string, path string) *LogEntry {
 		name:      name,
 		path:      path,
 		startTime: time.Now(),
+		trace:     trace.New(name, path),
 	}
 }
 
 func StartFileOperation(name string, args string) *LogEntry {
+	name = "File " + name
 	return &LogEntry{
-		name:      "File " + name,
+		name:      name,
 		args:      args,
 		startTime: time.Now(),
+		trace:     trace.New(name, args),
 	}
 }
 
@@ -111,6 +120,7 @@ func (r *LogEntry) FinishOperation(log *logrus.Logger) {
 	entry := log.WithFields(logrus.Fields{
 		"duration_ms": calculateDurationMillis(r.startTime),
 		"status":      r.status,
+		"pid":         os.Getpid(),
 	})
 
 	if r.path != "" {
@@ -131,6 +141,26 @@ func (r *LogEntry) FinishOperation(log *logrus.Logger) {
 	if r.err != nil {
 		log.Errorln(util.ErrorWithCauseChain(r.err))
 	}
+
+	r.logTrace(entry)
+}
+
+func (r *LogEntry) logTrace(entry *logrus.Entry) {
+	var msg string
+	// Use a different formatter for logging to HTML trace viewer since the TextFormatter will include color escape codes.
+	msgBytes, err := traceEntryFormatter.Format(entry)
+	if err != nil {
+		msg = fmt.Sprint(entry)
+	} else {
+		msg = string(msgBytes)
+	}
+	r.trace.LazyPrintf("%s", msg)
+
+	if r.err != nil {
+		r.trace.SetError()
+		r.trace.LazyPrintf("%s", util.ErrorWithCauseChain(r.err))
+	}
+	r.trace.Finish()
 }
 
 func calculateDurationMillis(startTime time.Time) int64 {
