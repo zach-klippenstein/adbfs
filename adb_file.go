@@ -1,4 +1,4 @@
-package fs
+package adbfs
 
 import "github.com/hanwen/go-fuse/fuse/nodefs"
 

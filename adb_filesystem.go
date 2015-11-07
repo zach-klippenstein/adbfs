@@ -1,5 +1,5 @@
 // TODO: Implement better file read.
-package fs
+package adbfs
 
 import (
 	"fmt"

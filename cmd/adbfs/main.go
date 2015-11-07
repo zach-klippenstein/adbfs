@@ -3,7 +3,7 @@ Another FUSE filesystem that can mount any device visible to your adb server.
 Uses github.com/zach-klippenstein/goadb to interface with the server directly
 instead of calling out to the adb client program.
 
-See package fs for the filesystem implementation.
+See package adbfs for the filesystem implementation.
 */
 package main
 
@@ -21,8 +21,9 @@ import (
 	"github.com/hanwen/go-fuse/fuse"
 	"github.com/hanwen/go-fuse/fuse/nodefs"
 	"github.com/hanwen/go-fuse/fuse/pathfs"
-	"github.com/zach-klippenstein/adbfs/fs"
 	"github.com/zach-klippenstein/goadb"
+
+	fs "github.com/zach-klippenstein/adbfs"
 )
 
 var (
