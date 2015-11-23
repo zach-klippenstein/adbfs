@@ -8,4 +8,4 @@ env:
 
 script:
   - source ./prepare_travis_for_tests.sh
-  - go test -v $(go list ./... | grep -v /vendor/)
+  - ./go.sh test -v $(go list ./... | grep -v /vendor/)
