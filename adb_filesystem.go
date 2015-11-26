@@ -9,6 +9,7 @@ import (
 	"github.com/hanwen/go-fuse/fuse"
 	"github.com/hanwen/go-fuse/fuse/nodefs"
 	"github.com/hanwen/go-fuse/fuse/pathfs"
+	"github.com/zach-klippenstein/goadb"
 	"github.com/zach-klippenstein/goadb/util"
 )
 
@@ -34,11 +35,17 @@ type AdbFileSystem struct {
 
 // Config stores arguments used by AdbFileSystem.
 type Config struct {
+	// Serial number of the device for which ClientFactory returns clients.
+	DeviceSerial string
+
 	// Absolute path to mountpoint, used to resolve symlinks.
 	Mountpoint string
 
 	// Used to initially populate the device client pool, and create clients for open files.
 	ClientFactory DeviceClientFactory
+
+	// Detects when the device is disconnected without filesystem accesses.
+	DeviceWatcher DeviceWatcher
 
 	Log *logrus.Logger
 
@@ -48,16 +55,26 @@ type Config struct {
 	ConnectionPoolSize int
 
 	// If non-nil, called when a util.Err with code DeviceNotFound is returned.
+	// Invoked on its own goroutine.
 	DeviceNotFoundHandler func()
+}
+
+type DeviceWatcher interface {
+	C() <-chan goadb.DeviceStateChangedEvent
+	Err() error
+	Shutdown()
 }
 
 type DeviceClientFactory func() DeviceClient
 
 var _ pathfs.FileSystem = &AdbFileSystem{}
 
-func NewAdbFileSystem(config Config) (fs pathfs.FileSystem, err error) {
+func NewAdbFileSystem(config Config) (pathfs.FileSystem, error) {
 	if config.Log == nil {
 		panic("no logger specified for filesystem")
+	}
+	if config.DeviceWatcher == nil {
+		panic("no DeviceWatcher specified for filesystem")
 	}
 
 	if config.ConnectionPoolSize < 1 {
@@ -68,15 +85,13 @@ func NewAdbFileSystem(config Config) (fs pathfs.FileSystem, err error) {
 	clientPool := make(chan DeviceClient, config.ConnectionPoolSize)
 	clientPool <- config.ClientFactory()
 
-	if config.Log == nil {
-		config.Log = logrus.StandardLogger()
-	}
-
-	fs = &AdbFileSystem{
+	fs := &AdbFileSystem{
 		FileSystem:         pathfs.NewDefaultFileSystem(),
 		config:             config,
 		quickUseClientPool: clientPool,
 	}
+
+	go fs.watchForDeviceDisconnected()
 
 	return fs, nil
 }
@@ -202,10 +217,36 @@ func (fs *AdbFileSystem) recycleQuickUseClient(client DeviceClient) {
 	fs.quickUseClientPool <- client
 }
 
+func (fs *AdbFileSystem) watchForDeviceDisconnected() {
+	watcher := fs.config.DeviceWatcher
+	serial := fs.config.DeviceSerial
+	defer watcher.Shutdown()
+
+	for {
+		select {
+		case event, ok := <-watcher.C():
+			if !ok {
+				// Channel closed.
+				break
+			}
+
+			if event.Serial == serial && event.WentOffline() {
+				logEntry := StartOperation("DeviceDisconnected", "")
+				fs.handleDeviceNotFound(logEntry)
+				logEntry.FinishOperation(fs.config.Log)
+			}
+		}
+	}
+
+	if err := watcher.Err(); err != nil {
+		fs.config.Log.Warn("DeviceWatcher disconnected with error:", err)
+	}
+}
+
 func (fs *AdbFileSystem) handleDeviceNotFound(logEntry *LogEntry) fuse.Status {
 	logEntry.Result("device disconnected")
 	if fs.config.DeviceNotFoundHandler != nil {
-		fs.config.DeviceNotFoundHandler()
+		go fs.config.DeviceNotFoundHandler()
 	}
 	return logEntry.Status(fuse.EIO)
 }

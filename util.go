@@ -18,6 +18,8 @@ func (b *AtomicBool) Value() bool {
 	return atomic.LoadInt32((*int32)(b)) != 0
 }
 
+// CompareAndSwap sets the value to newVal iff the current value is oldVal.
+// If the comparison was successful, returns true.
 func (b *AtomicBool) CompareAndSwap(oldVal, newVal bool) (swapped bool) {
 	var oldIntVal int32 = 0
 	if oldVal {

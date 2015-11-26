@@ -44,6 +44,8 @@ var (
 	server *fuse.Server
 	log    *logrus.Logger
 
+	mounted fs.AtomicBool
+
 	// Prevents trying to unmount the server multiple times.
 	unmounted fs.AtomicBool
 )
@@ -53,6 +55,10 @@ const StartTimeout = 5 * time.Second
 func main() {
 	flag.Parse()
 	initializeLogger()
+
+	if *deviceSerial == "" {
+		log.Fatalln("Device serial must be specified. Run with -h.")
+	}
 
 	if *mountpoint == "" {
 		log.Fatalln("Mountpoint must be specified. Run with -h.")
@@ -85,6 +91,7 @@ func main() {
 		log.Fatal(err)
 	}
 	log.Printf("mounted %s on %s", *deviceSerial, absoluteMountpoint)
+	mounted.CompareAndSwap(false, true)
 	defer unmountServer()
 
 	signals := make(chan os.Signal, 1)
@@ -189,13 +196,16 @@ func initializeCache(ttl time.Duration) fs.DirEntryCache {
 func initializeFileSystem(clientConfig goadb.ClientConfig, mountpoint string, cache fs.DirEntryCache, deviceNotFoundHandler func()) *pathfs.PathNodeFs {
 	clientFactory := fs.NewCachingDeviceClientFactory(cache,
 		fs.NewGoadbDeviceClientFactory(clientConfig, *deviceSerial))
+	deviceWatcher := goadb.NewDeviceWatcher(clientConfig)
 
 	var fsImpl pathfs.FileSystem
 	fsImpl, err := fs.NewAdbFileSystem(fs.Config{
+		DeviceSerial:          *deviceSerial,
 		Mountpoint:            mountpoint,
 		ClientFactory:         clientFactory,
 		Log:                   log,
 		ConnectionPoolSize:    *connectionPoolSize,
+		DeviceWatcher:         deviceWatcher,
 		DeviceNotFoundHandler: deviceNotFoundHandler,
 	})
 	if err != nil {
@@ -238,6 +248,9 @@ func unmountServer() {
 	if server == nil {
 		panic("attempted to unmount server before creating it")
 	}
+	if !mounted.Value() {
+		panic("attempted to unmount server before mounting it")
+	}
 
 	if unmounted.CompareAndSwap(false, true) {
 		log.Println("unmounting...")
@@ -247,15 +260,13 @@ func unmountServer() {
 }
 
 func handleDeviceDisconnected() {
-	// Server guaranteed to be non-nil by now, since we can't detect
-	// device disconnection without a filesystem op, which can't happen
-	// until the server has started.
-	go func() {
-		if !unmounted.Value() {
-			log.Infoln("device disconnected, unmounting...")
-			unmountServer()
-		}
-	}()
+	if !mounted.Value() || unmounted.Value() {
+		// May be called before mounting if device watcher detects disconnection.
+		return
+	}
+
+	log.Infoln("device disconnected, unmounting...")
+	unmountServer()
 }
 
 func checkValidMountpoint(path string) error {
