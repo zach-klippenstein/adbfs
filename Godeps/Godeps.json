@@ -1,6 +1,11 @@
 {
 	"ImportPath": "github.com/zach-klippenstein/adbfs",
-	"GoVersion": "go1.5",
+	"GoVersion": "go1.5.1",
+	"Packages": [
+		".",
+		"./cmd/adbfs",
+		"./cmd/adbfs-automount"
+	],
 	"Deps": [
 		{
 			"ImportPath": "github.com/Sirupsen/logrus",
@@ -16,8 +21,25 @@
 			"Rev": "93d85800f2fa6bd0a739e7bd612bfa3bc008b72d"
 		},
 		{
+			"ImportPath": "github.com/stretchr/testify/assert",
+			"Comment": "v1.0-40-g7c2b1e5",
+			"Rev": "7c2b1e5640dcf2631213ca962d892bffa1e08860"
+		},
+		{
 			"ImportPath": "github.com/zach-klippenstein/goadb",
 			"Rev": "677e09425fbd366968295b46bb8b1cc9423f5c72"
+		},
+		{
+			"ImportPath": "golang.org/x/net/context",
+			"Rev": "db8e4de5b2d6653f66aea53094624468caad15d2"
+		},
+		{
+			"ImportPath": "golang.org/x/net/internal/timeseries",
+			"Rev": "db8e4de5b2d6653f66aea53094624468caad15d2"
+		},
+		{
+			"ImportPath": "golang.org/x/net/trace",
+			"Rev": "db8e4de5b2d6653f66aea53094624468caad15d2"
 		}
 	]
 }
