@@ -9,7 +9,11 @@ A FUSE filesystem that uses [goadb](https://github.com/zach-klippenstein/goadb) 
 adbfs depends on fuse. For OS X, install osxfuse.
 Then run:
 
-`go get github.com/zach-klippenstein/adbfs`
+```
+$ go get github.com/zach-klippenstein/adbfs
+$ cd `go list -f '{{.Dir}}' github.com/zach-klippenstein/adbfs`
+$ ./install.sh
+```
 
 ### Let's mount some devices!
 
