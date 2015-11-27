@@ -12,7 +12,6 @@ import (
 	"flag"
 	"fmt"
 	"html/template"
-	stdlog "log"
 	"net"
 	"net/http"
 	_ "net/http/pprof"
@@ -28,16 +27,12 @@ import (
 	"github.com/zach-klippenstein/goadb"
 
 	fs "github.com/zach-klippenstein/adbfs"
+	"github.com/zach-klippenstein/adbfs/cli"
 )
 
 var (
-	deviceSerial       = flag.String("device", "", "Device serial number to mount.")
-	mountpoint         = flag.String("mountpoint", "", "Directory to mount the device on.")
-	adbPort            = flag.Int("port", goadb.AdbPort, "Port to connect to adb server on.")
-	connectionPoolSize = flag.Int("poolsize", 2, "Size of the connection pool. Not used for open files.")
-	logLevel           = flag.String("loglevel", "info", "Detail of logs to show.")
-	cacheTtl           = flag.Duration("cachettl", 300*time.Millisecond, "Duration to keep cached file info.")
-	serveDebug         = flag.Bool("debug", false, "If true, will start an HTTP server to expose profiling and trace logs.")
+	deviceSerial = flag.String("device", "", "Device serial number to mount.")
+	mountpoint   = flag.String("mountpoint", "", "Directory to mount the device on.")
 )
 
 var (
@@ -53,8 +48,9 @@ var (
 const StartTimeout = 5 * time.Second
 
 func main() {
+	cli.Initialize("adbfs")
 	flag.Parse()
-	initializeLogger()
+	log = cli.Config.Logger()
 
 	if *deviceSerial == "" {
 		log.Fatalln("Device serial must be specified. Run with -h.")
@@ -73,11 +69,8 @@ func main() {
 
 	initializeProfiler()
 
-	cache := initializeCache(*cacheTtl)
-
-	clientConfig := goadb.ClientConfig{
-		Dialer: goadb.NewDialer("", *adbPort),
-	}
+	cache := initializeCache(cli.Config.CacheTtl)
+	clientConfig := cli.Config.ClientConfig()
 
 	fs := initializeFileSystem(clientConfig, absoluteMountpoint, cache, handleDeviceDisconnected)
 
@@ -114,31 +107,8 @@ func main() {
 	}
 }
 
-func initializeLogger() {
-	log = logrus.StandardLogger()
-
-	logLevel, err := logrus.ParseLevel(*logLevel)
-	if err != nil {
-		log.Fatal(err)
-	}
-	log.Level = logLevel
-
-	log.Formatter = &logrus.TextFormatter{
-		FullTimestamp: true,
-		// RFC 3339 with milliseconds.
-		TimestampFormat: "2006-01-02T15:04:05.000000000Z07:00",
-	}
-
-	// Redirect standard logger (used by fuse) to our logger.
-	stdlog.SetOutput(log.Writer())
-	// Disable standard log timestamps, logrus has its own.
-	stdlog.SetFlags(0)
-
-	return
-}
-
 func initializeProfiler() {
-	if !*serveDebug {
+	if !cli.Config.ServeDebug {
 		return
 	}
 
@@ -204,7 +174,7 @@ func initializeFileSystem(clientConfig goadb.ClientConfig, mountpoint string, ca
 		Mountpoint:            mountpoint,
 		ClientFactory:         clientFactory,
 		Log:                   log,
-		ConnectionPoolSize:    *connectionPoolSize,
+		ConnectionPoolSize:    cli.Config.ConnectionPoolSize,
 		DeviceWatcher:         deviceWatcher,
 		DeviceNotFoundHandler: deviceNotFoundHandler,
 	})
