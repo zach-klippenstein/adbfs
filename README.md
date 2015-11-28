@@ -26,6 +26,35 @@ $ adbfs-automount
 ```
 
 You probably want to run this as a service when you login (e.g. create a LaunchAgent on OSX).
+For example, on OSX, paste this into `~/Library/LaunchAgents/com.adbfs-automount.plist` (substituting "zach" for your own username, of course):
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.adbfs-automount</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/Users/zach/go/bin/adbfs-automount</string>
+    <string>-adbfs=/Users/zach/go/bin/adbfs</string>
+  </array>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <true/>
+  <key>StandardOutPath</key>
+  <string>/Users/zach/adbfs.log</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/zach/adbfs.log</string>
+</dict>
+</plist>
+```
+then run
+```
+$ launchctl load ~/Library/LaunchAgents/com.adbfs-automount.plist
+$ launchctl start com.adbfs-automounter
+```
 
 ## adfs
 
