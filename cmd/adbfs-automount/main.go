@@ -24,8 +24,10 @@ import (
 )
 
 var (
-	mountRoot = flag.String("root", "", "directory in which to mount devices")
-	adbfsPath = flag.String("adbfs", "", "path to adbfs executable. If not specified, PATH is searched.")
+	mountRoot     = flag.String("root", "", "directory in which to mount devices")
+	adbfsPath     = flag.String("adbfs", "", "path to adbfs executable. If not specified, PATH is searched.")
+	allowAnyAdbfs = flag.Bool("disable-adbfs-verify", false,
+		"if true, the build SHA of adbfs won't be asserted to match this executable's")
 
 	log *logrus.Logger
 )
@@ -92,7 +94,7 @@ func initializeAdbfsCommand(path string) exec.Cmd {
 
 	version := strings.Split(string(checkOutput), "\n")[0]
 	log.Debugln("found", version)
-	if version != expectedVersion {
+	if version != expectedVersion && !*allowAnyAdbfs {
 		log.Fatalf("adbfs executable doesn't look like adbfs: expected '%s', found '%s'", expectedVersion, version)
 	}
 
@@ -117,6 +119,10 @@ func initializeMountRoot(path string) string {
 }
 
 func validateMountRoot(path string) {
+	if path == "" {
+		log.Fatalln("no mount root specified.")
+	}
+
 	info, err := os.Stat(path)
 	if err != nil {
 		log.Fatalln("could not read mount root", path, ":", err)

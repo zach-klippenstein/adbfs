@@ -5,19 +5,24 @@ import (
 	"os"
 	"os/user"
 	"path/filepath"
+	"runtime"
 )
 
-func findDefaultMountRoot_darwin() string {
-	return firstExistentDir(home("/mnt"), "/Volumes")
-}
+var (
+	homeMountRoot  = home("/mnt")
+	mountRootsByOS = map[string][]string{
+		"darwin": []string{homeMountRoot, "/Volumes"},
+		"linux":  []string{homeMountRoot, "/mnt"},
+	}
+)
 
-func findDefaultMountRoot_linux() string {
-	return firstExistentDir(home("/mnt"), "/mnt")
+func FindDefaultMountRoot() string {
+	return firstExistentDir(mountRootsByOS[runtime.GOOS])
 }
 
 // firstExistentPath returns the first path that actually exists and is a directory.
 // If no directories exist, logs an error message with log.Fatal.
-func firstExistentDir(paths ...string) string {
+func firstExistentDir(paths []string) string {
 	for _, path := range paths {
 		dir, err := os.Stat(path)
 		if err != nil {
