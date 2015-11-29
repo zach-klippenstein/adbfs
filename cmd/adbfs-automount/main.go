@@ -6,7 +6,6 @@ package main
 
 import (
 	"fmt"
-	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -25,7 +24,7 @@ var (
 	adbfsPath = kingpin.Flag("adbfs",
 		"Path to adbfs executable. If not specified, PATH is searched.").PlaceHolder("/usr/bin/adbfs").ExistingFile()
 	allowAnyAdbfs = kingpin.Flag("disable-adbfs-verify",
-		"If true, the build SHA of adbfs won't be required to match that of this executable.").Bool()
+		"If true, the build SHA of adbfs won't be required to match that of this executable.").Hidden().Bool()
 
 	log *logrus.Logger
 )
@@ -115,20 +114,6 @@ func validateMountRoot(path string) {
 	}
 	if !info.IsDir() {
 		log.Fatalln(path, "is not a directory")
-	}
-
-	dir, err := os.Open(path)
-	if err != nil {
-		log.Fatalf("could not read mount root %s: %s", path, err)
-	}
-
-	// Only care if there are >0 entries, so don't read them all.
-	entries, err := dir.Readdirnames(1)
-	if err != nil && err != io.EOF {
-		log.Fatalln("could not read mount root", path, ":", err)
-	}
-	if len(entries) != 0 {
-		log.Warnln("mount root", path, "is not empty, is another instance already running?")
 	}
 }
 
