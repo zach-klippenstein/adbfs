@@ -5,29 +5,27 @@ when connected.
 package main
 
 import (
-	"flag"
+	"fmt"
+	"io"
 	"os"
 	"os/exec"
-	"strings"
-	"syscall"
-
-	"io"
-
-	"fmt"
-	"regexp"
-
 	"path/filepath"
+	"regexp"
+	"strings"
 
 	"github.com/Sirupsen/logrus"
 	"github.com/zach-klippenstein/adbfs/cli"
 	"github.com/zach-klippenstein/goadb"
+	"gopkg.in/alecthomas/kingpin.v2"
 )
 
 var (
-	mountRoot     = flag.String("root", "", "directory in which to mount devices")
-	adbfsPath     = flag.String("adbfs", "", "path to adbfs executable. If not specified, PATH is searched.")
-	allowAnyAdbfs = flag.Bool("disable-adbfs-verify", false,
-		"if true, the build SHA of adbfs won't be asserted to match this executable's")
+	mountRoot = kingpin.Flag("root",
+		"Directory in which to mount devices.").Short('r').PlaceHolder("/mnt").ExistingDir()
+	adbfsPath = kingpin.Flag("adbfs",
+		"Path to adbfs executable. If not specified, PATH is searched.").PlaceHolder("/usr/bin/adbfs").ExistingFile()
+	allowAnyAdbfs = kingpin.Flag("disable-adbfs-verify",
+		"If true, the build SHA of adbfs won't be required to match that of this executable.").Bool()
 
 	log *logrus.Logger
 )
@@ -46,8 +44,7 @@ var dirNameCleanerRegexp = regexp.MustCompilePOSIX(`[^-[:alnum:]]+`)
 
 func main() {
 	cli.Initialize("adbfs-automount")
-	flag.Parse()
-	log = cli.Config.Logger()
+	log = cli.Config.Logger
 
 	config := &Config{
 		adbfsBaseCommand: initializeAdbfsCommand(*adbfsPath),
@@ -82,20 +79,9 @@ func initializeAdbfsCommand(path string) exec.Cmd {
 
 	log.Debugln("trying to use adbfs at", path)
 
-	// Make sure we've got something that looks like adbfs with the right version.
-	expectedVersion := cli.Config.VersionStringForApp("adbfs")
-	checkOutput, err := exec.Command(path, "-h").CombinedOutput()
-	if err != nil {
-		if !hasExitStatus(err, 2) {
-			// flag exits with 2 on help.
-			log.Fatalln("error accessing adbfs:", err)
-		}
-	}
-
-	version := strings.Split(string(checkOutput), "\n")[0]
-	log.Debugln("found", version)
-	if version != expectedVersion && !*allowAnyAdbfs {
-		log.Fatalf("adbfs executable doesn't look like adbfs: expected '%s', found '%s'", expectedVersion, version)
+	if !*allowAnyAdbfs {
+		// Make sure we've got something that looks like adbfs with the right version.
+		cli.CheckExecutableSameBuildSHA("adbfs", path)
 	}
 
 	log.Infoln("using adbfs executable", path)
@@ -224,16 +210,7 @@ func (c *Config) buildMountCommandForDevice(mountpoint, serial string) (cmd exec
 	// Copy the base command, don't mutate it.
 	cmd = c.adbfsBaseCommand
 	cmd.Args = append(cli.Config.AsArgs(),
-		fmt.Sprintf("-device=%s", serial),
-		fmt.Sprintf("-mountpoint=%s", mountpoint))
+		fmt.Sprintf("--device=%s", serial),
+		fmt.Sprintf("--mountpoint=%s", mountpoint))
 	return
-}
-
-func hasExitStatus(err error, exitStatus int) bool {
-	if exitError, ok := err.(*exec.ExitError); ok {
-		if waitStatus, ok := exitError.Sys().(syscall.WaitStatus); ok {
-			return exitStatus == waitStatus.ExitStatus()
-		}
-	}
-	return false
 }

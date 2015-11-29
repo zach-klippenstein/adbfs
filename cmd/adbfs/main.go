@@ -9,7 +9,6 @@ package main
 
 import (
 	"errors"
-	"flag"
 	"fmt"
 	"html/template"
 	"net"
@@ -24,15 +23,17 @@ import (
 	"github.com/hanwen/go-fuse/fuse"
 	"github.com/hanwen/go-fuse/fuse/nodefs"
 	"github.com/hanwen/go-fuse/fuse/pathfs"
-	"github.com/zach-klippenstein/goadb"
-
 	fs "github.com/zach-klippenstein/adbfs"
 	"github.com/zach-klippenstein/adbfs/cli"
+	"github.com/zach-klippenstein/goadb"
+	"gopkg.in/alecthomas/kingpin.v2"
 )
 
 var (
-	deviceSerial = flag.String("device", "", "Device serial number to mount.")
-	mountpoint   = flag.String("mountpoint", "", "Directory to mount the device on.")
+	deviceSerial = kingpin.Flag("device",
+		"Serial number of device to mount.").Short('s').Required().String()
+	mountpoint = kingpin.Flag("mountpoint",
+		"Directory to mount the device on.").PlaceHolder("/mnt").Required().String()
 )
 
 var (
@@ -49,8 +50,7 @@ const StartTimeout = 5 * time.Second
 
 func main() {
 	cli.Initialize("adbfs")
-	flag.Parse()
-	log = cli.Config.Logger()
+	log = cli.Config.Logger
 
 	if *deviceSerial == "" {
 		log.Fatalln("Device serial must be specified. Run with -h.")

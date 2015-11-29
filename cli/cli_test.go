@@ -17,12 +17,17 @@ func TestAdbfsConfigAsArgs(t *testing.T) {
 	}
 
 	expectedArgs := []string{
-		"-port=10",
-		"-poolsize=20",
-		"-loglevel=warn",
-		"-cachettl=30s",
-		"-debug=true",
+		"--port=10",
+		"--pool=20",
+		"--log=warn",
+		"--cachettl=30s",
+		"--debug",
 	}
 
 	assert.Equal(t, expectedArgs, config.AsArgs())
+}
+
+func TestFormatBoolFlag(t *testing.T) {
+	assert.Equal(t, "--debug", FormatBoolFlag("debug", true))
+	assert.Equal(t, "--no-debug", FormatBoolFlag("debug", false))
 }
