@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"os/signal"
 	"strings"
 
 	"github.com/zach-klippenstein/adbfs/internal/cli"
@@ -29,20 +30,35 @@ func main() {
 	deviceWatcher := goadb.NewDeviceWatcher(config.ClientConfig())
 	defer deviceWatcher.Shutdown()
 
+	signals := make(chan os.Signal)
+	signal.Notify(signals, os.Kill, os.Interrupt)
+
+	processes := cli.NewProcessTracker()
+	defer processes.Shutdown()
+
 	cli.Log.Info("automounter ready.")
+	defer cli.Log.Info("exiting.")
 
 	for {
 		select {
 		case event := <-deviceWatcher.C():
 			if event.CameOnline() {
 				cli.Log.Debugln("device connected:", event.Serial)
-				go mountDevice(event.Serial)
+				processes.Go(event.Serial, mountDevice)
+			}
+		case signal := <-signals:
+			cli.Log.Debugln("got signal", signal)
+			if signal == os.Kill || signal == os.Interrupt {
+				cli.Log.Info("shutting down all mount processes…")
+				processes.Shutdown()
+				cli.Log.Info("all processes shutdown.")
+				return
 			}
 		}
 	}
 }
 
-func mountDevice(serial string) {
+func mountDevice(serial string, stop <-chan struct{}) {
 	defer func() {
 		cli.Log.Debugln("device mount process finished:", serial)
 	}()
@@ -68,6 +84,12 @@ func mountDevice(serial string) {
 	}
 
 	cli.Log.Infof("device %s mounted with PID %d", serial, cmd.Process.Pid)
+
+	// If we're told to stop, kill the mount process.
+	go func() {
+		<-stop
+		cmd.Process.Kill()
+	}()
 
 	if err := cmd.Wait(); err != nil {
 		if err, ok := err.(*exec.ExitError); ok {
