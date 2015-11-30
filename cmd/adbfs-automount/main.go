@@ -63,7 +63,14 @@ func mountDevice(serial string, stop <-chan struct{}) {
 		cli.Log.Debugln("device mount process finished:", serial)
 	}()
 
-	mountpoint, err := cli.NewMountpointForDevice(config.ClientConfig(), config.MountRoot, serial)
+	adbClient := goadb.NewDeviceClient(config.ClientConfig(), goadb.DeviceWithSerial(serial))
+	deviceInfo, err := adbClient.GetDeviceInfo()
+	if err != nil {
+		cli.Log.Errorf("error getting device info for %s: %s", serial, err)
+		return
+	}
+
+	mountpoint, err := cli.NewMountpointForDevice(deviceInfo, config.MountRoot, serial)
 	if err != nil {
 		cli.Log.Errorf("error creating mountpoint for %s: %s", serial, err)
 		return
@@ -90,6 +97,14 @@ func mountDevice(serial string, stop <-chan struct{}) {
 		<-stop
 		cmd.Process.Kill()
 	}()
+
+	handlerBinding := map[string]string{
+		cli.PathHandlerVar:   mountpoint,
+		cli.SerialHandlerVar: serial,
+		cli.ModelHandlerVar:  deviceInfo.Model,
+	}
+	cli.FireHandlers(config.OnMountHandlers, handlerBinding)
+	defer cli.FireHandlers(config.OnUnmountHandlers, handlerBinding)
 
 	if err := cmd.Wait(); err != nil {
 		if err, ok := err.(*exec.ExitError); ok {

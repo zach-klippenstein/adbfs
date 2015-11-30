@@ -11,6 +11,6 @@ cat >"$HELPER_DIR/fusermount" <<EOF
 EOF
 chmod +x "$HELPER_DIR/fusermount"
 
-export PATH="$PATH:$HELPER_DIR"
+export PATH="$HELPER_DIR:$PATH"
 
 set +x

@@ -37,7 +37,7 @@ For example, on OSX, paste this into `~/Library/LaunchAgents/com.adbfs-automount
   <key>ProgramArguments</key>
   <array>
     <string>/Users/zach/go/bin/adbfs-automount</string>
-    <string>-adbfs=/Users/zach/go/bin/adbfs</string>
+    <string>--adbfs=/Users/zach/go/bin/adbfs</string>
   </array>
   <key>RunAtLoad</key>
   <true/>
@@ -66,7 +66,7 @@ Devices are specified by serial number. To list the serial numbers of all connec
 
 The serial number is the left-most column. To mount a device with serial number `02b5c5a809117c73` on `/mnt`, run:
 
-`adbfs -device 02b5c5a809117c73 -mountpoint /mnt`
+`adbfs --device 02b5c5a809117c73 --mountpoint /mnt`
 
 Example:
 ```
@@ -87,11 +87,14 @@ INFO[2015-09-07T16:13:03.400884026-07:00] mounted 02b5c5a809117c73 on /Users/zac
 `adbfs-automount` listens for new device connections to adb and runs an instance of `adbfs` for each device to mount
 it. Most arguments are passed through to `adbfs`, but there are a few arguments specific to the automounter:
 
-`-root`: the directory under which to mount devices. If this is not specified, it will try to figure out
+`--root`: the directory under which to mount devices. If this is not specified, it will try to figure out
 a good path. On OSX, `~/mnt` is used if it exists, else `/Volumes`. On Linux, it tries `~/mnt` then `/mnt`.
 
-`-adbfs`: path to the adbfs executable to run. If not specified, will search `$PATH`. The executable _must_ be built
+`--adbfs`: path to the adbfs executable to run. If not specified, will search `$PATH`. The executable _must_ be built
 from the same SHA as `adbfs-automount`, which will exit with an error if this is not the case.
+
+`--on-(un)mount`: a command to run when a device is (un)mounted. Can be repeated to run multiple commands.
+E.g. `--on-mount 'say $ADBFS_MODEL' --on-mount 'open $ADBFS_PATH'` will speak the type of device and open it in Finder.
 
 ## Running from Source
 

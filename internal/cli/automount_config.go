@@ -2,24 +2,28 @@ package cli
 
 import (
 	"os"
-
 	"os/exec"
 
 	"gopkg.in/alecthomas/kingpin.v2"
+"fmt"
 )
 
 type AutomountConfig struct {
 	BaseConfig
 
-	MountRoot     string
-	PathToAdbfs   string
-	AllowAnyAdbfs bool
+	MountRoot       string
+	PathToAdbfs     string
+	AllowAnyAdbfs   bool
+	OnMountHandlers []string
+	OnUnmountHandlers []string
 }
 
 const (
-	MountRootFlag     = "root"
-	PathToAdbfsFlag   = "adbfs"
-	AllowAnyAdbfsFlag = "disable-adbfs-verify"
+	MountRootFlag      = "root"
+	PathToAdbfsFlag    = "adbfs"
+	AllowAnyAdbfsFlag  = "disable-adbfs-verify"
+	OnMountHandlerFlag = "on-mount"
+	OnUnmountHandlerFlag = "on-unmount"
 )
 
 func RegisterAutomountFlags(config *AutomountConfig) {
@@ -31,6 +35,14 @@ func RegisterAutomountFlags(config *AutomountConfig) {
 		"Path to adbfs executable. If not specified, PATH is searched.").PlaceHolder("/usr/bin/adbfs").ExistingFileVar(&config.PathToAdbfs)
 	kingpin.Flag(AllowAnyAdbfsFlag,
 		"If true, the build SHA of adbfs won't be required to match that of this executable.").Hidden().BoolVar(&config.AllowAnyAdbfs)
+	kingpin.Flag(OnMountHandlerFlag,
+		`Command(s) to run after a device is mounted. May be repeated.
+The following environment variables will be defined:
+`+describeHandlerVars()).PlaceHolder(fmt.Sprintf(`"open $%s"`, PathHandlerVar)).StringsVar(&config.OnMountHandlers)
+	kingpin.Flag(OnUnmountHandlerFlag,
+		`Command(s) to run after a device has been unmounted. May be repeated.
+The following environment variables will be defined:
+`+describeHandlerVars()).PlaceHolder(fmt.Sprintf(`"say unmounted $%s"`, ModelHandlerVar)).StringsVar(&config.OnUnmountHandlers)
 }
 
 func (c *AutomountConfig) InitializePaths() {
@@ -66,7 +78,14 @@ func (c *AutomountConfig) initializeAdbfs() {
 		}
 	}
 
-	err := CheckExecutableVersionMatches(c.PathToAdbfs, "adbfs", BuildSHA())
+	var expectedVersion string
+	if c.AllowAnyAdbfs {
+		expectedVersion = ""
+	} else {
+		expectedVersion = BuildSHA()
+	}
+
+	err := CheckExecutableVersionMatches(c.PathToAdbfs, "adbfs", expectedVersion)
 	if err != nil {
 		Log.Fatal(err)
 	}

@@ -16,13 +16,7 @@ const MountpointPerm os.FileMode = 0700
 // with single underscores. See mountpoint_test.go for examples.
 var dirNameCleanerRegexp = regexp.MustCompilePOSIX(`[^-[:alnum:]]+`)
 
-func NewMountpointForDevice(clientConfig goadb.ClientConfig, mountRoot, serial string) (mountpoint string, err error) {
-	adbClient := goadb.NewDeviceClient(clientConfig, goadb.DeviceWithSerial(serial))
-	deviceInfo, err := adbClient.GetDeviceInfo()
-	if err != nil {
-		return
-	}
-
+func NewMountpointForDevice(deviceInfo *goadb.DeviceInfo, mountRoot, serial string) (mountpoint string, err error) {
 	dirName := buildDirNameForDevice(deviceInfo)
 	mountpoint = filepath.Join(mountRoot, dirName)
 
