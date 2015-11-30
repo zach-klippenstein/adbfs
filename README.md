@@ -2,6 +2,8 @@
 
 A FUSE filesystem that uses [goadb](https://github.com/zach-klippenstein/goadb) to expose Android devices' filesystems.
 
+_Tests are broken because Travis doesn't like fuse._
+
 ## Quick Start
 
 ### Installation
