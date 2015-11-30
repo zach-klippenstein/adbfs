@@ -8,7 +8,7 @@ import (
 )
 
 func TestAdbfsConfigAsArgs(t *testing.T) {
-	config := AdbfsConfig{
+	config := BaseConfig{
 		AdbPort:            10,
 		ConnectionPoolSize: 20,
 		LogLevel:           "warn",
@@ -22,12 +22,13 @@ func TestAdbfsConfigAsArgs(t *testing.T) {
 		"--log=warn",
 		"--cachettl=30s",
 		"--debug",
+		"--no-verbose",
 	}
 
 	assert.Equal(t, expectedArgs, config.AsArgs())
 }
 
 func TestFormatBoolFlag(t *testing.T) {
-	assert.Equal(t, "--debug", FormatBoolFlag("debug", true))
-	assert.Equal(t, "--no-debug", FormatBoolFlag("debug", false))
+	assert.Equal(t, "--debug", formatFlag("debug", true))
+	assert.Equal(t, "--no-debug", formatFlag("debug", false))
 }
