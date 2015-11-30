@@ -19,26 +19,20 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/Sirupsen/logrus"
 	"github.com/hanwen/go-fuse/fuse"
 	"github.com/hanwen/go-fuse/fuse/nodefs"
 	"github.com/hanwen/go-fuse/fuse/pathfs"
 	fs "github.com/zach-klippenstein/adbfs"
-	"github.com/zach-klippenstein/adbfs/cli"
+	"github.com/zach-klippenstein/adbfs/internal/cli"
 	"github.com/zach-klippenstein/goadb"
-	"gopkg.in/alecthomas/kingpin.v2"
 )
 
-var (
-	deviceSerial = kingpin.Flag("device",
-		"Serial number of device to mount.").Short('s').Required().String()
-	mountpoint = kingpin.Flag("mountpoint",
-		"Directory to mount the device on.").PlaceHolder("/mnt").Required().String()
-)
+const StartTimeout = 5 * time.Second
 
 var (
+	config cli.AdbfsConfig
+
 	server *fuse.Server
-	log    *logrus.Logger
 
 	mounted fs.AtomicBool
 
@@ -46,44 +40,45 @@ var (
 	unmounted fs.AtomicBool
 )
 
-const StartTimeout = 5 * time.Second
+func init() {
+	cli.RegisterAdbfsFlags(&config)
+}
 
 func main() {
-	cli.Initialize("adbfs")
-	log = cli.Config.Logger
+	cli.Initialize("adbfs", &config.BaseConfig)
 
-	if *deviceSerial == "" {
-		log.Fatalln("Device serial must be specified. Run with -h.")
+	if config.DeviceSerial == "" {
+		cli.Log.Fatalln("Device serial must be specified. Run with -h.")
 	}
 
-	if *mountpoint == "" {
-		log.Fatalln("Mountpoint must be specified. Run with -h.")
+	if config.Mountpoint == "" {
+		cli.Log.Fatalln("Mountpoint must be specified. Run with -h.")
 	}
-	absoluteMountpoint, err := filepath.Abs(*mountpoint)
+	absoluteMountpoint, err := filepath.Abs(config.Mountpoint)
 	if err != nil {
-		log.Fatal(err)
+		cli.Log.Fatal(err)
 	}
 	if err = checkValidMountpoint(absoluteMountpoint); err != nil {
-		log.Fatal(err)
+		cli.Log.Fatal(err)
 	}
 
 	initializeProfiler()
 
-	cache := initializeCache(cli.Config.CacheTtl)
-	clientConfig := cli.Config.ClientConfig()
+	cache := initializeCache(config.CacheTtl)
+	clientConfig := config.ClientConfig()
 
 	fs := initializeFileSystem(clientConfig, absoluteMountpoint, cache, handleDeviceDisconnected)
 
 	server, _, err = nodefs.MountRoot(absoluteMountpoint, fs.Root(), nil)
 	if err != nil {
-		log.Fatal(err)
+		cli.Log.Fatal(err)
 	}
 
 	serverDone, err := startServer(StartTimeout)
 	if err != nil {
-		log.Fatal(err)
+		cli.Log.Fatal(err)
 	}
-	log.Printf("mounted %s on %s", *deviceSerial, absoluteMountpoint)
+	cli.Log.Printf("mounted %s on %s", config.DeviceSerial, absoluteMountpoint)
 	mounted.CompareAndSwap(false, true)
 	defer unmountServer()
 
@@ -93,33 +88,33 @@ func main() {
 	for {
 		select {
 		case signal := <-signals:
-			log.Println("got signal", signal)
+			cli.Log.Println("got signal", signal)
 			switch signal {
 			case os.Kill, os.Interrupt:
-				log.Println("exiting...")
+				cli.Log.Println("exiting...")
 				return
 			}
 
 		case <-serverDone:
-			log.Debugln("server done channel closed.")
+			cli.Log.Debugln("server done channel closed.")
 			return
 		}
 	}
 }
 
 func initializeProfiler() {
-	if !cli.Config.ServeDebug {
+	if !config.ServeDebug {
 		return
 	}
 
-	log.Debug("starting profiling server...")
+	cli.Log.Debug("starting profiling server...")
 
 	listener, err := net.ListenTCP("tcp", &net.TCPAddr{
 		IP:   net.ParseIP("127.0.0.1"),
 		Port: 0, // Bind to a random port.
 	})
 	if err != nil {
-		log.Errorln("error starting profiling server:", err)
+		cli.Log.Errorln("error starting profiling server:", err)
 		return
 	}
 
@@ -150,36 +145,36 @@ func initializeProfiler() {
 	go func() {
 		defer listener.Close()
 		if err := http.Serve(listener, nil); err != nil {
-			log.Errorln("profiling server error:", err)
+			cli.Log.Errorln("profiling server error:", err)
 			return
 		}
 	}()
 
-	log.Printf("profiling server listening on http://%s/debug", listener.Addr())
+	cli.Log.Printf("profiling server listening on http://%s/debug", listener.Addr())
 }
 
 func initializeCache(ttl time.Duration) fs.DirEntryCache {
-	log.Infoln("stat cache ttl:", ttl)
+	cli.Log.Infoln("stat cache ttl:", ttl)
 	return fs.NewDirEntryCache(ttl)
 }
 
 func initializeFileSystem(clientConfig goadb.ClientConfig, mountpoint string, cache fs.DirEntryCache, deviceNotFoundHandler func()) *pathfs.PathNodeFs {
 	clientFactory := fs.NewCachingDeviceClientFactory(cache,
-		fs.NewGoadbDeviceClientFactory(clientConfig, *deviceSerial))
+		fs.NewGoadbDeviceClientFactory(clientConfig, config.DeviceSerial))
 	deviceWatcher := goadb.NewDeviceWatcher(clientConfig)
 
 	var fsImpl pathfs.FileSystem
 	fsImpl, err := fs.NewAdbFileSystem(fs.Config{
-		DeviceSerial:          *deviceSerial,
+		DeviceSerial:          config.DeviceSerial,
 		Mountpoint:            mountpoint,
 		ClientFactory:         clientFactory,
-		Log:                   log,
-		ConnectionPoolSize:    cli.Config.ConnectionPoolSize,
+		Log:                   cli.Log,
+		ConnectionPoolSize:    config.ConnectionPoolSize,
 		DeviceWatcher:         deviceWatcher,
 		DeviceNotFoundHandler: deviceNotFoundHandler,
 	})
 	if err != nil {
-		log.Fatal(err)
+		cli.Log.Fatal(err)
 	}
 
 	return pathfs.NewPathNodeFs(fsImpl, nil)
@@ -190,7 +185,7 @@ func startServer(startTimeout time.Duration) (<-chan struct{}, error) {
 	go func() {
 		defer close(serverDone)
 		server.Serve()
-		log.Println("server finished.")
+		cli.Log.Println("server finished.")
 		return
 	}()
 
@@ -205,7 +200,7 @@ func startServer(startTimeout time.Duration) (<-chan struct{}, error) {
 
 	select {
 	case <-serverReady:
-		log.Println("server ready.")
+		cli.Log.Println("server ready.")
 		return serverDone, nil
 	case <-serverDone:
 		return nil, errors.New("unknown error")
@@ -223,9 +218,9 @@ func unmountServer() {
 	}
 
 	if unmounted.CompareAndSwap(false, true) {
-		log.Println("unmounting...")
+		cli.Log.Println("unmounting...")
 		server.Unmount()
-		log.Println("unmounted.")
+		cli.Log.Println("unmounted.")
 	}
 }
 
@@ -235,7 +230,7 @@ func handleDeviceDisconnected() {
 		return
 	}
 
-	log.Infoln("device disconnected, unmounting...")
+	cli.Log.Infoln("device disconnected, unmounting...")
 	unmountServer()
 }
 

@@ -8,4 +8,4 @@ GO_CMD="$1"
 shift
 
 set -x
-go "$GO_CMD" -ldflags "-X $IMPORT_PATH/cli.buildSHA=$BUILD_SHA" "$@"
+go "$GO_CMD" -ldflags "-X $IMPORT_PATH/internal/cli.buildSHA=$BUILD_SHA" "$@"

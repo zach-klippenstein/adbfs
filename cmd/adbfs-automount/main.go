@@ -8,194 +8,134 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"path/filepath"
-	"regexp"
+	"os/signal"
 	"strings"
 
-	"github.com/Sirupsen/logrus"
-	"github.com/zach-klippenstein/adbfs/cli"
+	"github.com/zach-klippenstein/adbfs/internal/cli"
 	"github.com/zach-klippenstein/goadb"
-	"gopkg.in/alecthomas/kingpin.v2"
 )
 
-var (
-	mountRoot = kingpin.Flag("root",
-		"Directory in which to mount devices.").Short('r').PlaceHolder("/mnt").ExistingDir()
-	adbfsPath = kingpin.Flag("adbfs",
-		"Path to adbfs executable. If not specified, PATH is searched.").PlaceHolder("/usr/bin/adbfs").ExistingFile()
-	allowAnyAdbfs = kingpin.Flag("disable-adbfs-verify",
-		"If true, the build SHA of adbfs won't be required to match that of this executable.").Hidden().Bool()
+var config cli.AutomountConfig
 
-	log *logrus.Logger
-)
-
-type Config struct {
-	adbfsBaseCommand exec.Cmd
-	mountRoot        string
-
-	// Permissions for mountpoint directories.
-	mountpointPerm os.FileMode
+func init() {
+	cli.RegisterAutomountFlags(&config)
 }
 
-// When creating directory names from device info, all special characters are replaced
-// with single underscores. See main_test.go for examples.
-var dirNameCleanerRegexp = regexp.MustCompilePOSIX(`[^-[:alnum:]]+`)
-
 func main() {
-	cli.Initialize("adbfs-automount")
-	log = cli.Config.Logger
+	cli.Initialize("adbfs-automount", &config.BaseConfig)
 
-	config := &Config{
-		adbfsBaseCommand: initializeAdbfsCommand(*adbfsPath),
-		mountRoot:        initializeMountRoot(*mountRoot),
-		mountpointPerm:   0700,
-	}
+	config.InitializePaths()
+	cli.Log.Infoln("using mount root", config.MountRoot)
 
-	deviceWatcher := goadb.NewDeviceWatcher(cli.Config.ClientConfig())
+	deviceWatcher := goadb.NewDeviceWatcher(config.ClientConfig())
 	defer deviceWatcher.Shutdown()
 
-	log.Info("automounter ready.")
+	signals := make(chan os.Signal)
+	signal.Notify(signals, os.Kill, os.Interrupt)
+
+	processes := cli.NewProcessTracker()
+	defer processes.Shutdown()
+
+	cli.Log.Info("automounter ready.")
+	defer cli.Log.Info("exiting.")
 
 	for {
 		select {
 		case event := <-deviceWatcher.C():
 			if event.CameOnline() {
-				log.Debugln("device connected:", event.Serial)
-				go mountDevice(config, event.Serial)
+				cli.Log.Debugln("device connected:", event.Serial)
+				processes.Go(event.Serial, mountDevice)
+			}
+		case signal := <-signals:
+			cli.Log.Debugln("got signal", signal)
+			if signal == os.Kill || signal == os.Interrupt {
+				cli.Log.Info("shutting down all mount processes…")
+				processes.Shutdown()
+				cli.Log.Info("all processes shutdown.")
+				return
 			}
 		}
 	}
 }
 
-func initializeAdbfsCommand(path string) exec.Cmd {
-	if path == "" {
-		var err error
-		path, err = exec.LookPath("adbfs")
-		if err != nil {
-			log.Fatalln("couldn't find adbfs executable in PATH.", err)
+func mountDevice(serial string, stop <-chan struct{}) {
+	defer func() {
+		cli.Log.Debugln("device mount process finished:", serial)
+	}()
+
+	adbClient := goadb.NewDeviceClient(config.ClientConfig(), goadb.DeviceWithSerial(serial))
+	deviceInfo, err := adbClient.GetDeviceInfo()
+	if err != nil {
+		cli.Log.Errorf("error getting device info for %s: %s", serial, err)
+		return
+	}
+
+	mountpoint, err := cli.NewMountpointForDevice(deviceInfo, config.MountRoot, serial)
+	if err != nil {
+		cli.Log.Errorf("error creating mountpoint for %s: %s", serial, err)
+		return
+	}
+	defer RemoveLoggingError(mountpoint)
+
+	cli.Log.Infof("mounting %s on %s", serial, mountpoint)
+	cmd := NewMountProcess(config.PathToAdbfs, cli.AdbfsConfig{
+		BaseConfig:   config.BaseConfig,
+		DeviceSerial: serial,
+		Mountpoint:   mountpoint,
+	})
+
+	cli.Log.Debugln("launching adbfs:", CommandLine(cmd))
+	if err := cmd.Start(); err != nil {
+		cli.Log.Errorln("error starting adbfs process:", err)
+		return
+	}
+
+	cli.Log.Infof("device %s mounted with PID %d", serial, cmd.Process.Pid)
+
+	// If we're told to stop, kill the mount process.
+	go func() {
+		<-stop
+		cmd.Process.Kill()
+	}()
+
+	handlerBinding := map[string]string{
+		cli.PathHandlerVar:   mountpoint,
+		cli.SerialHandlerVar: serial,
+		cli.ModelHandlerVar:  deviceInfo.Model,
+	}
+	cli.FireHandlers(config.OnMountHandlers, handlerBinding)
+	defer cli.FireHandlers(config.OnUnmountHandlers, handlerBinding)
+
+	if err := cmd.Wait(); err != nil {
+		if err, ok := err.(*exec.ExitError); ok {
+			cli.Log.Errorf("adbfs exited with %+v", err)
+		} else {
+			cli.Log.Errorf("lost connection with adbfs process:", err)
 		}
+		return
 	}
 
-	log.Debugln("trying to use adbfs at", path)
+	cli.Log.Infof("mount process for device %s stopped", serial)
+}
 
-	if !*allowAnyAdbfs {
-		// Make sure we've got something that looks like adbfs with the right version.
-		cli.CheckExecutableSameBuildSHA("adbfs", path)
+func RemoveLoggingError(path string) {
+	cli.Log.Debugln("removing", path)
+	if err := os.Remove(path); err != nil {
+		cli.Log.Errorf("error removing %s: %s", path, err)
+	} else {
+		cli.Log.Debug("removed successfully.")
 	}
+}
 
-	log.Infoln("using adbfs executable", path)
-
-	return exec.Cmd{
-		Path:   path,
+func NewMountProcess(pathToAdbfs string, config cli.AdbfsConfig) *exec.Cmd {
+	return &exec.Cmd{
+		Path:   pathToAdbfs,
+		Args:   config.AsArgs(),
 		Stdout: os.Stdout,
 		Stderr: os.Stderr,
 	}
 }
 
-func initializeMountRoot(path string) string {
-	if path == "" {
-		log.Debug("no mount root specified, falling back to default…")
-		path = cli.FindDefaultMountRoot()
-	}
-
-	validateMountRoot(path)
-	log.Infoln("using mount root", path)
-	return path
-}
-
-func validateMountRoot(path string) {
-	if path == "" {
-		log.Fatalln("no mount root specified.")
-	}
-
-	info, err := os.Stat(path)
-	if err != nil {
-		log.Fatalln("could not read mount root", path, ":", err)
-	}
-	if !info.IsDir() {
-		log.Fatalln(path, "is not a directory")
-	}
-}
-
-func mountDevice(config *Config, serial string) {
-	defer func() {
-		log.Debugln("device mount process finished:", serial)
-	}()
-
-	deviceMountpoint, err := createMountpointForDevice(config, serial)
-	if err != nil {
-		log.Errorf("error creating mountpoint for %s: %s", serial, err)
-		return
-	}
-	defer removeMountpoint(deviceMountpoint)
-
-	log.Infof("mounting %s on %s", serial, deviceMountpoint)
-	cmd := config.buildMountCommandForDevice(deviceMountpoint, serial)
-
-	log.Debugf("launching adbfs: %s %s", cmd.Path, strings.Join(cmd.Args, " "))
-	if err = cmd.Start(); err != nil {
-		log.Errorln("error starting adbfs process:", err)
-		return
-	}
-
-	log.Infof("device %s mounted with PID %d", serial, cmd.Process.Pid)
-
-	if err = cmd.Wait(); err != nil {
-		if err, ok := err.(*exec.ExitError); ok {
-			log.Errorf("adbfs exited with %+v", err)
-		} else {
-			log.Errorf("lost connection with adbfs process:", err)
-		}
-		return
-	}
-
-	log.Infof("mount process for device %s stopped", serial)
-}
-
-func createMountpointForDevice(config *Config, serial string) (mountpoint string, err error) {
-	adbClient := goadb.NewDeviceClient(cli.Config.ClientConfig(), goadb.DeviceWithSerial(serial))
-	deviceInfo, err := adbClient.GetDeviceInfo()
-	if err != nil {
-		return
-	}
-
-	dirName := buildDirNameForDevice(deviceInfo)
-	mountpoint = filepath.Join(config.mountRoot, dirName)
-
-	if doesFileExist(mountpoint) {
-		err = fmt.Errorf("directory exists: %s", serial, mountpoint)
-		return
-	}
-
-	log.Debugf("creating %s with permissions %s", mountpoint, config.mountpointPerm)
-	err = os.Mkdir(mountpoint, config.mountpointPerm)
-	return
-}
-
-func removeMountpoint(path string) {
-	log.Debugln("removing mountpoint", path)
-	if err := os.Remove(path); err != nil {
-		log.Errorf("error removing mountpoint %s: %s", path, err)
-	} else {
-		log.Debugln("mountpoint removed successfully.")
-	}
-}
-
-func doesFileExist(path string) bool {
-	_, err := os.Stat(path)
-	return err == os.ErrNotExist
-}
-
-func buildDirNameForDevice(deviceInfo *goadb.DeviceInfo) string {
-	rawName := fmt.Sprintf("%s-%s", deviceInfo.Model, deviceInfo.Serial)
-	return dirNameCleanerRegexp.ReplaceAllLiteralString(rawName, "_")
-}
-
-func (c *Config) buildMountCommandForDevice(mountpoint, serial string) (cmd exec.Cmd) {
-	// Copy the base command, don't mutate it.
-	cmd = c.adbfsBaseCommand
-	cmd.Args = append(cli.Config.AsArgs(),
-		fmt.Sprintf("--device=%s", serial),
-		fmt.Sprintf("--mountpoint=%s", mountpoint))
-	return
+func CommandLine(cmd *exec.Cmd) string {
+	return fmt.Sprintf("%s %s", cmd.Path, strings.Join(cmd.Args, " "))
 }
