@@ -82,7 +82,7 @@ func (c *AutomountConfig) initializeAdbfs() {
 	if c.AllowAnyAdbfs {
 		expectedVersion = ""
 	} else {
-		expectedVersion = BuildSHA()
+		expectedVersion = Version
 	}
 
 	err := CheckExecutableVersionMatches(c.PathToAdbfs, "adbfs", expectedVersion)

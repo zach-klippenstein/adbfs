@@ -101,9 +101,6 @@ E.g. `--on-mount 'say $ADBFS_MODEL' --on-mount 'open $ADBFS_PATH'` will speak th
 
 ## Running from Source
 
-Don't use `go` directly. Use the `./go.sh` script instead, which sets the build SHA variable used for
-printing version.
-
 ```
-$ ./go.sh run cmd/adbfs/main.go …
+$ go run cmd/adbfs/main.go …
 ```
