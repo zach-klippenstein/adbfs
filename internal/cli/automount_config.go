@@ -1,28 +1,28 @@
 package cli
 
 import (
+	"fmt"
 	"os"
 	"os/exec"
 
 	"gopkg.in/alecthomas/kingpin.v2"
-"fmt"
 )
 
 type AutomountConfig struct {
 	BaseConfig
 
-	MountRoot       string
-	PathToAdbfs     string
-	AllowAnyAdbfs   bool
-	OnMountHandlers []string
+	MountRoot         string
+	PathToAdbfs       string
+	AllowAnyAdbfs     bool
+	OnMountHandlers   []string
 	OnUnmountHandlers []string
 }
 
 const (
-	MountRootFlag      = "root"
-	PathToAdbfsFlag    = "adbfs"
-	AllowAnyAdbfsFlag  = "disable-adbfs-verify"
-	OnMountHandlerFlag = "on-mount"
+	MountRootFlag        = "root"
+	PathToAdbfsFlag      = "adbfs"
+	AllowAnyAdbfsFlag    = "disable-adbfs-verify"
+	OnMountHandlerFlag   = "on-mount"
 	OnUnmountHandlerFlag = "on-unmount"
 )
 
