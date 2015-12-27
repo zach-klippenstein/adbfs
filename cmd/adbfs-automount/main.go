@@ -13,6 +13,7 @@ import (
 
 	"github.com/zach-klippenstein/adbfs/internal/cli"
 	"github.com/zach-klippenstein/goadb"
+	"golang.org/x/net/context"
 )
 
 var config cli.AutomountConfig
@@ -58,7 +59,7 @@ func main() {
 	}
 }
 
-func mountDevice(serial string, stop <-chan struct{}) {
+func mountDevice(serial string, context context.Context) {
 	defer func() {
 		cli.Log.Debugln("device mount process finished:", serial)
 	}()
@@ -94,7 +95,7 @@ func mountDevice(serial string, stop <-chan struct{}) {
 
 	// If we're told to stop, kill the mount process.
 	go func() {
-		<-stop
+		<-context.Done()
 		cmd.Process.Kill()
 	}()
 
