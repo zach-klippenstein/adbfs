@@ -1,3 +1,5 @@
 #!/bin/sh
 
-./go.sh install -v ./cmd/...
+export GO15VENDOREXPERIMENT=1
+
+go install -v ./cmd/...

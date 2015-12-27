@@ -7,6 +7,8 @@ import (
 	"syscall"
 )
 
+const Version = "1.0.0"
+
 // CheckExecutableVersionMatches returns an error if running "$path --version" does not give
 // output indicating that it is appName with version.
 // If version is empty, ignores the version number as long as the appName matches.
@@ -41,7 +43,7 @@ func formatVersion(appName, version string) string {
 	return fmt.Sprintf("%s v%s", appName, version)
 }
 
-var versionStringRegexp = regexp.MustCompilePOSIX(`^([-a-z]+) v([[:alnum:]]{7})$`)
+var versionStringRegexp = regexp.MustCompilePOSIX(`^([-a-z]+) v([[:digit:]]+\.[[:digit:]]+\.[[:digit:]]+)$`)
 
 func parseVersion(versionString string) (appName, version string, err error) {
 	submatches := versionStringRegexp.FindStringSubmatch(versionString)
@@ -54,6 +56,10 @@ func parseVersion(versionString string) (appName, version string, err error) {
 	appName = submatches[1]
 	version = submatches[2]
 	return
+}
+
+func versionString(appName string) string {
+	return formatVersion(appName, Version)
 }
 
 func hasExitStatus(err error, exitStatus int) bool {

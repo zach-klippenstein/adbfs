@@ -11,8 +11,6 @@ import (
 
 var Log *logrus.Logger
 
-var buildSHA string
-
 func init() {
 	kingpin.HelpFlag.Short('h')
 }
@@ -28,13 +26,6 @@ func Initialize(appName string, baseConfig *BaseConfig) {
 	initializeLogger(appName, baseConfig)
 }
 
-func BuildSHA() string {
-	if buildSHA == "" {
-		panic("build SHA not set")
-	}
-	return buildSHA
-}
-
 func initializeLogger(appName string, baseConfig *BaseConfig) {
 	Log = baseConfig.createLogger()
 
@@ -44,10 +35,6 @@ func initializeLogger(appName string, baseConfig *BaseConfig) {
 	log.SetFlags(0)
 
 	Log.Println(versionString(appName))
-}
-
-func versionString(appName string) string {
-	return formatVersion(appName, BuildSHA())
 }
 
 func formatFlag(name string, value interface{}) string {
