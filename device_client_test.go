@@ -35,7 +35,7 @@ func (c *delegateDeviceClient) ReadLink(path, rootPath string, log *LogEntry) (s
 func TestReadLinkFromDevice_AbsoluteTarget(t *testing.T) {
 	target, err, status := readLinkFromDevice("version_link.txt", "/foo/bar",
 		func(cmd string, args ...string) (string, error) {
-			if cmd == "readlink" && args[0] == "-f" && args[1] == "version_link.txt" {
+			if cmd == "readlink" && args[0] == "version_link.txt" {
 				return "/version.txt\r\n", nil
 			}
 			t.Fatal("invalid command:", cmd, args)
@@ -49,7 +49,7 @@ func TestReadLinkFromDevice_AbsoluteTarget(t *testing.T) {
 func TestReadLinkFromDevice_RelativeTarget(t *testing.T) {
 	target, err, status := readLinkFromDevice("version_link.txt", "/foo/bar",
 		func(cmd string, args ...string) (string, error) {
-			if cmd == "readlink" && args[0] == "-f" && args[1] == "version_link.txt" {
+			if cmd == "readlink" && args[0] == "version_link.txt" {
 				return "version.txt\r\n", nil
 			}
 			t.Fatal("invalid command:", cmd, args)
@@ -63,7 +63,7 @@ func TestReadLinkFromDevice_RelativeTarget(t *testing.T) {
 func TestReadLinkFromDevice_NotALink(t *testing.T) {
 	_, err, status := readLinkFromDevice("version.txt", "",
 		func(cmd string, args ...string) (string, error) {
-			if cmd == "readlink" && args[0] == "-f" && args[1] == "version.txt" {
+			if cmd == "readlink" && args[0] == "version.txt" {
 				return ReadlinkInvalidArgument, nil
 			}
 			t.Fatal("invalid command:", cmd, args)
@@ -76,7 +76,7 @@ func TestReadLinkFromDevice_NotALink(t *testing.T) {
 func TestReadLinkFromDevice_PermissionDenied(t *testing.T) {
 	_, err, status := readLinkFromDevice("version_link.txt", "",
 		func(cmd string, args ...string) (string, error) {
-			if cmd == "readlink" && args[0] == "-f" && args[1] == "version_link.txt" {
+			if cmd == "readlink" && args[0] == "version_link.txt" {
 				return ReadlinkPermissionDenied, nil
 			}
 			t.Fatal("invalid command:", cmd, args)
