@@ -2,6 +2,7 @@ package adbfs
 
 import (
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/zach-klippenstein/goadb"
@@ -99,4 +100,25 @@ func TestCachingDeviceClientStat_Root(t *testing.T) {
 	entry, err := client.Stat("/", &LogEntry{})
 	assert.NoError(t, err)
 	assert.Equal(t, "/", entry.Name)
+}
+
+func TestCachingDeviceClientOpenWrite(t *testing.T) {
+	var removeCallCount int
+	client := &CachingDeviceClient{
+		DeviceClient: &delegateDeviceClient{
+			openWrite: openWriteNoop(),
+		},
+		Cache: &delegateDirEntryCache{
+			DoRemoveEventually: func(path string) {
+				removeCallCount++
+			},
+		},
+	}
+
+	w, err := client.OpenWrite("/", 1, time.Unix(2, 3), &LogEntry{})
+	assert.NoError(t, err)
+	assert.Equal(t, 0, removeCallCount)
+
+	w.Close()
+	assert.Equal(t, 1, removeCallCount)
 }

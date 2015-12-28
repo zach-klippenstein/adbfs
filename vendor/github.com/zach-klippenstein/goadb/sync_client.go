@@ -1,4 +1,3 @@
-// TODO(z): Implement send.
 package goadb
 
 import (
@@ -16,11 +15,11 @@ func stat(conn *wire.SyncConn, path string) (*DirEntry, error) {
 	if err := conn.SendOctetString("STAT"); err != nil {
 		return nil, err
 	}
-	if err := conn.SendString(path); err != nil {
+	if err := conn.SendBytes([]byte(path)); err != nil {
 		return nil, err
 	}
 
-	id, err := conn.ReadOctetString()
+	id, err := conn.ReadStatus("stat")
 	if err != nil {
 		return nil, err
 	}
@@ -35,7 +34,7 @@ func listDirEntries(conn *wire.SyncConn, path string) (entries *DirEntries, err 
 	if err = conn.SendOctetString("LIST"); err != nil {
 		return
 	}
-	if err = conn.SendString(path); err != nil {
+	if err = conn.SendBytes([]byte(path)); err != nil {
 		return
 	}
 
@@ -46,11 +45,27 @@ func receiveFile(conn *wire.SyncConn, path string) (io.ReadCloser, error) {
 	if err := conn.SendOctetString("RECV"); err != nil {
 		return nil, err
 	}
-	if err := conn.SendString(path); err != nil {
+	if err := conn.SendBytes([]byte(path)); err != nil {
+		return nil, err
+	}
+	return newSyncFileReader(conn)
+}
+
+// sendFile returns a WriteCloser than will write to the file at path on device.
+// The file will be created with permissions specified by mode.
+// The file's modified time will be set to mtime, unless mtime is 0, in which case the time the writer is
+// closed will be used.
+func sendFile(conn *wire.SyncConn, path string, mode os.FileMode, mtime time.Time) (io.WriteCloser, error) {
+	if err := conn.SendOctetString("SEND"); err != nil {
 		return nil, err
 	}
 
-	return newSyncFileReader(conn), nil
+	pathAndMode := encodePathAndMode(path, mode)
+	if err := conn.SendBytes(pathAndMode); err != nil {
+		return nil, err
+	}
+
+	return newSyncFileWriter(conn, mtime), nil
 }
 
 func readStat(s wire.SyncScanner) (entry *DirEntry, err error) {

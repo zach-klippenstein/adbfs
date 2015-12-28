@@ -25,6 +25,7 @@ type BaseConfig struct {
 	CacheTtl           time.Duration
 	ServeDebug         bool
 	DeviceRoot         string
+	ReadOnly           bool
 }
 
 const (
@@ -35,6 +36,7 @@ const (
 	VerboseFlag            = "verbose"
 	ServeDebugFlag         = "debug"
 	DeviceRootFlag         = "device-root"
+	ReadOnlyFlag           = "readonly"
 )
 
 func registerBaseFlags(config *BaseConfig) {
@@ -43,6 +45,7 @@ func registerBaseFlags(config *BaseConfig) {
 	kingpin.Flag(CacheTtlFlag, "Duration to keep cached file info.").Default(DefaultCacheTtl.String()).DurationVar(&config.CacheTtl)
 	kingpin.Flag(ServeDebugFlag, "If set, will start an HTTP server to expose profiling and trace logs. Off by default.").BoolVar(&config.ServeDebug)
 	kingpin.Flag(DeviceRootFlag, "The device directory to mount.").Default("/sdcard").StringVar(&config.DeviceRoot)
+	kingpin.Flag(ReadOnlyFlag, "Mount as a readonly filesystem. True by default, since write support is still experimental. Use --no-readonly to enable writes.").Short('r').Default("true").BoolVar(&config.ReadOnly)
 
 	logLevels := []string{
 		logrus.PanicLevel.String(),
@@ -67,6 +70,7 @@ func (c *BaseConfig) AsArgs() []string {
 		formatFlag(ServeDebugFlag, c.ServeDebug),
 		formatFlag(VerboseFlag, c.Verbose),
 		formatFlag(DeviceRootFlag, c.DeviceRoot),
+		formatFlag(ReadOnlyFlag, c.ReadOnly),
 	}
 }
 

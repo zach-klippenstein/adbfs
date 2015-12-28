@@ -32,6 +32,12 @@ func main() {
 	config.InitializePaths()
 	eventLog.Infof("using mount root %s", config.MountRoot)
 
+	if config.ReadOnly {
+		eventLog.Infof("mounting as read-only filesystem")
+	} else {
+		eventLog.Infof("mounting as writable filesystem")
+	}
+
 	deviceWatcher := goadb.NewDeviceWatcher(config.ClientConfig())
 	defer deviceWatcher.Shutdown()
 

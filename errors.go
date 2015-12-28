@@ -42,7 +42,8 @@ func toErrnoLog(err error, logEntry *LogEntry) (status syscall.Errno) {
 // toErrno converts a known error to an Errno, or EIO if the error is not known.
 func toErrno(err error) syscall.Errno {
 	switch {
-	case err == nil:
+	case err == nil || err == OK:
+		// Passing OK can be more readable than passing nil.
 		return OK
 	case err == ErrLinkTooDeep:
 		return syscall.ELOOP

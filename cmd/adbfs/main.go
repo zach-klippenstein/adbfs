@@ -21,6 +21,7 @@ import (
 	"github.com/hanwen/go-fuse/fuse/pathfs"
 	fs "github.com/zach-klippenstein/adbfs"
 	"github.com/zach-klippenstein/adbfs/internal/cli"
+	. "github.com/zach-klippenstein/adbfs/internal/util"
 	"github.com/zach-klippenstein/goadb"
 )
 
@@ -31,10 +32,10 @@ var (
 
 	server *fuse.Server
 
-	mounted fs.AtomicBool
+	mounted AtomicBool
 
 	// Prevents trying to unmount the server multiple times.
-	unmounted fs.AtomicBool
+	unmounted AtomicBool
 )
 
 func init() {
@@ -114,6 +115,7 @@ func initializeFileSystem(clientConfig goadb.ClientConfig, mountpoint string, ca
 		ClientFactory:      clientFactory,
 		ConnectionPoolSize: config.ConnectionPoolSize,
 		DeviceRoot:         config.DeviceRoot,
+		ReadOnly:           config.ReadOnly,
 	})
 	if err != nil {
 		cli.Log.Fatal(err)

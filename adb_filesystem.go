@@ -61,6 +61,8 @@ type Config struct {
 	// the number of concurrently open files).
 	// Values <1 are treated as 1.
 	ConnectionPoolSize int
+
+	ReadOnly bool
 }
 
 type DeviceClientFactory func() DeviceClient
@@ -368,7 +370,8 @@ func (fs *AdbFileSystem) Access(name string, mode uint32, context *fuse.Context)
 	logEntry := StartOperation("Access", name)
 	defer logEntry.SuppressFinishOperation()
 
-	if mode&fuse.W_OK == fuse.W_OK {
+	if mode&fuse.W_OK == fuse.W_OK && fs.config.ReadOnly {
+		// This is not a user-permission denial, it's a filesystem config denial, so don't use EACCES.
 		return toFuseStatusLog(ErrNotPermitted, logEntry)
 	}
 
@@ -381,7 +384,8 @@ func (fs *AdbFileSystem) Access(name string, mode uint32, context *fuse.Context)
 		return toFuseStatusLog(err, logEntry)
 	}
 
-	logEntry.Result("target %s exists, read/execute access permitted", name)
+	// For now, just assume all existing files are accessible.
+	logEntry.Result("target %s exists, assuming all access permitted", name)
 	return toFuseStatusLog(OK, logEntry)
 }
 
@@ -389,7 +393,21 @@ func (fs *AdbFileSystem) Create(name string, rawFlags uint32, perms uint32, cont
 	name = fs.convertClientPathToDevicePath(name)
 	logEntry := StartOperation("Create", name)
 	defer logEntry.FinishOperation()
-	return nil, toFuseStatusLog(syscall.ENOSYS, logEntry)
+
+	flags := FileOpenFlags(rawFlags)
+	flags |= O_CREATE | O_TRUNC
+
+	// Need at least one write flag.
+	if !flags.Contains(O_RDWR) {
+		flags |= O_WRONLY
+	}
+
+	file, err := fs.createFile(name, flags, os.FileMode(perms), logEntry)
+	if err == nil {
+		logEntry.Result("%s", file)
+	}
+
+	return file, toFuseStatusLog(err, logEntry)
 }
 
 func (fs *AdbFileSystem) Open(name string, flags uint32, context *fuse.Context) (nodefs.File, fuse.Status) {
@@ -398,15 +416,22 @@ func (fs *AdbFileSystem) Open(name string, flags uint32, context *fuse.Context) 
 	logEntry := StartOperation("Open", name)
 	defer logEntry.FinishOperation()
 
-	file, err := fs.createFile(name, FileOpenFlags(flags), logEntry)
+	file, err := fs.createFile(name, FileOpenFlags(flags), DontSetPerms, logEntry)
 	if err == nil {
 		logEntry.Result("%s", file)
 	}
 	return file, toFuseStatusLog(err, logEntry)
 }
 
-func (fs *AdbFileSystem) createFile(name string, flags FileOpenFlags, logEntry *LogEntry) (nodefs.File, error) {
-	openFile, err := fs.openFiles.GetOrLoad(name, flags, logEntry)
+func (fs *AdbFileSystem) createFile(name string, flags FileOpenFlags, perms os.FileMode, logEntry *LogEntry) (nodefs.File, error) {
+	isWriteOp := flags.Contains(O_RDWR | O_WRONLY | O_CREATE | O_TRUNC | O_APPEND)
+	if isWriteOp && fs.config.ReadOnly {
+		// This is not a user-permission denial, it's a filesystem config denial, so don't use EACCES.
+		return nil, ErrNotPermitted
+	}
+	cli.Log.Debugf("createFile: flags=%s, ReadOnly=%s", flags, fs.config.ReadOnly)
+
+	openFile, err := fs.openFiles.GetOrLoad(name, flags, perms, logEntry)
 	if err != nil {
 		return nil, err
 	}
@@ -424,6 +449,10 @@ func (fs *AdbFileSystem) Mkdir(name string, perms uint32, context *fuse.Context)
 
 	logEntry := StartOperation("Mkdir", name)
 	defer logEntry.FinishOperation()
+
+	if fs.config.ReadOnly {
+		return toFuseStatusLog(ErrNotPermitted, logEntry)
+	}
 
 	device := fs.getQuickUseClient()
 	defer fs.recycleQuickUseClient(device)
@@ -453,6 +482,10 @@ func (fs *AdbFileSystem) Rename(oldName, newName string, context *fuse.Context) 
 	logEntry := StartOperation("Rename", fmt.Sprintf("%s→%s", oldName, newName))
 	defer logEntry.FinishOperation()
 
+	if fs.config.ReadOnly {
+		return toFuseStatusLog(ErrNotPermitted, logEntry)
+	}
+
 	device := fs.getQuickUseClient()
 	defer fs.recycleQuickUseClient(device)
 
@@ -480,6 +513,10 @@ func (fs *AdbFileSystem) Rmdir(name string, context *fuse.Context) fuse.Status {
 	logEntry := StartOperation("Rename", name)
 	defer logEntry.FinishOperation()
 
+	if fs.config.ReadOnly {
+		return toFuseStatusLog(ErrNotPermitted, logEntry)
+	}
+
 	device := fs.getQuickUseClient()
 	defer fs.recycleQuickUseClient(device)
 
@@ -506,6 +543,10 @@ func (fs *AdbFileSystem) Unlink(name string, context *fuse.Context) fuse.Status 
 
 	logEntry := StartOperation("Unlink", name)
 	defer logEntry.FinishOperation()
+
+	if fs.config.ReadOnly {
+		return toFuseStatusLog(ErrNotPermitted, logEntry)
+	}
 
 	device := fs.getQuickUseClient()
 	defer fs.recycleQuickUseClient(device)

@@ -280,6 +280,27 @@ func TestMkdir_Success(t *testing.T) {
 	assertStatusOk(t, status)
 }
 
+func TestMkdir_ReadOnlyFs(t *testing.T) {
+	dev := &delegateDeviceClient{
+		runCommand: func(cmd string, args []string) (string, error) {
+			if cmd == "mkdir" && args[0] == "/newdir" {
+				return "", nil
+			}
+			t.Fatal("invalid command:", cmd, args)
+			return "", nil
+		},
+	}
+	fs, err := NewAdbFileSystem(Config{
+		Mountpoint:    "",
+		ClientFactory: func() DeviceClient { return dev },
+		ReadOnly:      true,
+	})
+	assert.NoError(t, err)
+
+	status := fs.Mkdir("newdir", 0, newContext())
+	assert.Equal(t, fuse.EPERM, status)
+}
+
 func TestMkdir_Error(t *testing.T) {
 	dev := &delegateDeviceClient{
 		runCommand: func(cmd string, args []string) (string, error) {
@@ -318,6 +339,27 @@ func TestRename_Success(t *testing.T) {
 
 	status := fs.Rename("old", "new", newContext())
 	assertStatusOk(t, status)
+}
+
+func TestRename_ReadOnlyFs(t *testing.T) {
+	dev := &delegateDeviceClient{
+		runCommand: func(cmd string, args []string) (string, error) {
+			if cmd == "mv" && args[0] == "/old" && args[1] == "/new" {
+				return "", nil
+			}
+			t.Fatal("invalid command:", cmd, args)
+			return "", nil
+		},
+	}
+	fs, err := NewAdbFileSystem(Config{
+		Mountpoint:    "",
+		ClientFactory: func() DeviceClient { return dev },
+		ReadOnly:      true,
+	})
+	assert.NoError(t, err)
+
+	status := fs.Rename("old", "new", newContext())
+	assert.Equal(t, fuse.EPERM, status)
 }
 
 func TestRename_Error(t *testing.T) {
@@ -360,6 +402,27 @@ func TestRmdir_Success(t *testing.T) {
 	assertStatusOk(t, status)
 }
 
+func TestRmdir_ReadOnlyFs(t *testing.T) {
+	dev := &delegateDeviceClient{
+		runCommand: func(cmd string, args []string) (string, error) {
+			if cmd == "rmdir" && args[0] == "/dir" {
+				return "", nil
+			}
+			t.Fatal("invalid command:", cmd, args)
+			return "", nil
+		},
+	}
+	fs, err := NewAdbFileSystem(Config{
+		Mountpoint:    "",
+		ClientFactory: func() DeviceClient { return dev },
+		ReadOnly:      true,
+	})
+	assert.NoError(t, err)
+
+	status := fs.Rmdir("dir", newContext())
+	assert.Equal(t, fuse.EPERM, status)
+}
+
 func TestRmdir_Error(t *testing.T) {
 	dev := &delegateDeviceClient{
 		runCommand: func(cmd string, args []string) (string, error) {
@@ -400,6 +463,27 @@ func TestUnlink_Success(t *testing.T) {
 	assertStatusOk(t, status)
 }
 
+func TestUnlink_ReadOnlyFs(t *testing.T) {
+	dev := &delegateDeviceClient{
+		runCommand: func(cmd string, args []string) (string, error) {
+			if cmd == "rm" && args[0] == "/file.txt" {
+				return "", nil
+			}
+			t.Fatal("invalid command:", cmd, args)
+			return "", nil
+		},
+	}
+	fs, err := NewAdbFileSystem(Config{
+		Mountpoint:    "",
+		ClientFactory: func() DeviceClient { return dev },
+		ReadOnly:      true,
+	})
+	assert.NoError(t, err)
+
+	status := fs.Unlink("file.txt", newContext())
+	assert.Equal(t, fuse.EPERM, status)
+}
+
 func TestUnlink_Error(t *testing.T) {
 	dev := &delegateDeviceClient{
 		runCommand: func(cmd string, args []string) (string, error) {
@@ -420,7 +504,85 @@ func TestUnlink_Error(t *testing.T) {
 	assert.Equal(t, fuse.EACCES, status)
 }
 
-func TestOpen_ExistSuccess(t *testing.T) {
+func TestCreateFile_ExistSuccess(t *testing.T) {
+	dev := &delegateDeviceClient{
+		stat: statFiles(&goadb.DirEntry{
+			Name: "/file",
+			Size: 512,
+			Mode: 0600,
+		}),
+		openRead: openReadString("foobar"),
+	}
+	fs, err := NewAdbFileSystem(Config{
+		Mountpoint:    "",
+		ClientFactory: func() DeviceClient { return dev },
+	})
+	assert.NoError(t, err)
+	afs := fs.(*AdbFileSystem)
+
+	file, err := afs.createFile("/file", O_RDONLY, DontSetPerms, &LogEntry{})
+	assert.NoError(t, err)
+
+	adbFile := getAdbFile(file)
+	assert.NotNil(t, adbFile)
+	assert.Equal(t, "/file", adbFile.FileBuffer.Path)
+	assert.True(t, adbFile.Flags.CanRead())
+	assert.Equal(t, "-rw-------", adbFile.FileBuffer.Perms.String())
+	assert.True(t, adbFile.Flags.CanRead())
+	assert.False(t, adbFile.Flags.CanWrite())
+}
+
+func TestCreateFile_NoExistCreateSuccess(t *testing.T) {
+	dev := &delegateDeviceClient{
+		stat:      statFiles(),
+		openWrite: openWriteNoop(),
+	}
+	fs, err := NewAdbFileSystem(Config{
+		Mountpoint:    "",
+		ClientFactory: func() DeviceClient { return dev },
+	})
+	assert.NoError(t, err)
+	afs := fs.(*AdbFileSystem)
+
+	file, err := afs.createFile("/file", O_RDWR|O_CREATE, DontSetPerms, &LogEntry{})
+	assert.NoError(t, err)
+
+	adbFile := getAdbFile(file)
+	assert.NotNil(t, adbFile)
+	assert.Equal(t, "/file", adbFile.FileBuffer.Path)
+	assert.Equal(t, "-rw-rw-r--", adbFile.FileBuffer.Perms.String())
+	assert.True(t, adbFile.Flags.CanRead())
+	assert.True(t, adbFile.Flags.CanWrite())
+}
+
+func TestCreateFile_ReadOnlyFs(t *testing.T) {
+	dev := &delegateDeviceClient{
+		stat:      statFiles(),
+		openWrite: openWriteNoop(),
+	}
+	fs, err := NewAdbFileSystem(Config{
+		Mountpoint:    "",
+		ClientFactory: func() DeviceClient { return dev },
+		ReadOnly:      true,
+	})
+	assert.NoError(t, err)
+	afs := fs.(*AdbFileSystem)
+
+	for _, flags := range []FileOpenFlags{
+		O_RDWR,
+		O_WRONLY,
+		O_CREATE,
+		O_TRUNC,
+		O_APPEND,
+	} {
+		_, err := afs.createFile("file", flags, 0644, &LogEntry{})
+		assert.Equal(t, ErrNotPermitted, err)
+	}
+}
+
+func TestOpen(t *testing.T) {
+	// Open is just a thin wrapper around createFile, so this is just a smoke test.
+
 	dev := &delegateDeviceClient{
 		stat: statFiles(&goadb.DirEntry{
 			Name: "/file",
@@ -435,13 +597,40 @@ func TestOpen_ExistSuccess(t *testing.T) {
 	})
 	assert.NoError(t, err)
 
-	file, status := fs.Open("file", uint32(os.O_RDONLY), newContext())
+	file, status := fs.Open("/file", uint32(O_RDONLY), newContext())
 	assertStatusOk(t, status)
 
 	adbFile := getAdbFile(file)
 	assert.NotNil(t, adbFile)
 	assert.Equal(t, "/file", adbFile.FileBuffer.Path)
 	assert.True(t, adbFile.Flags.CanRead())
+	assert.Equal(t, "-rw-------", adbFile.FileBuffer.Perms.String())
+	assert.True(t, adbFile.Flags.CanRead())
+	assert.False(t, adbFile.Flags.CanWrite())
+}
+
+func TestCreate_NoWriteFlag(t *testing.T) {
+	// Create is just a thin wrapper around createFile, so this is just a smoke test.
+
+	dev := &delegateDeviceClient{
+		stat:      statFiles(),
+		openWrite: openWriteNoop(),
+	}
+	fs, err := NewAdbFileSystem(Config{
+		Mountpoint:    "",
+		ClientFactory: func() DeviceClient { return dev },
+	})
+	assert.NoError(t, err)
+
+	file, status := fs.Create("file", uint32(os.O_RDONLY), 0644, newContext())
+	assertStatusOk(t, status)
+
+	adbFile := getAdbFile(file)
+	assert.NotNil(t, adbFile)
+	assert.Equal(t, "/file", adbFile.FileBuffer.Path)
+	assert.Equal(t, "-rw-r--r--", adbFile.FileBuffer.Perms.String())
+	assert.False(t, adbFile.Flags.CanRead())
+	assert.True(t, adbFile.Flags.CanWrite())
 }
 
 func TestParseStatfs(t *testing.T) {

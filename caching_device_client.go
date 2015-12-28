@@ -1,7 +1,10 @@
 package adbfs
 
 import (
+	"io"
+	"os"
 	"path"
+	"time"
 
 	"github.com/zach-klippenstein/goadb"
 	"github.com/zach-klippenstein/goadb/util"
@@ -80,4 +83,26 @@ func (c *CachingDeviceClient) ListDirEntries(path string, log *LogEntry) ([]*goa
 		return nil, err
 	}
 	return entries.InOrder, nil
+}
+
+func (c *CachingDeviceClient) OpenWrite(name string, perms os.FileMode, mtime time.Time, log *LogEntry) (io.WriteCloser, error) {
+	// Writing to the file obviously invalidates the file's cache entry.
+	w, err := c.DeviceClient.OpenWrite(name, perms, mtime, log)
+
+	// The mtime is only set on the file on close, so don't bother invalidating the cache until then.
+	onClosed := func() {
+		c.Cache.RemoveEventually(path.Dir(name))
+	}
+	return onCloseWriter{w, onClosed}, err
+}
+
+type onCloseWriter struct {
+	io.WriteCloser
+	onClosed func()
+}
+
+func (w onCloseWriter) Close() (err error) {
+	err = w.WriteCloser.Close()
+	w.onClosed()
+	return
 }
