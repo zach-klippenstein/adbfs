@@ -2,6 +2,7 @@
 package adbfs
 
 import (
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"path/filepath"
@@ -234,6 +235,141 @@ func (fs *AdbFileSystem) Open(name string, flags uint32, context *fuse.Context) 
 	file = newLoggingFile(file, fs.config.Log)
 
 	return file, logEntry.Status(fuse.OK)
+}
+
+// Mkdir creates name on the device with the default permissions.
+// mode is ignored.
+func (fs *AdbFileSystem) Mkdir(name string, mode uint32, context *fuse.Context) fuse.Status {
+	name = convertClientPathToDevicePath(name)
+
+	logEntry := StartOperation("Mkdir", name)
+	defer logEntry.FinishOperation(fs.config.Log)
+
+	device := fs.getQuickUseClient()
+	defer fs.recycleQuickUseClient(device)
+
+	err, status := mkdir(device, name)
+	if util.HasErrCode(err, util.DeviceNotFound) {
+		return fs.handleDeviceNotFound(logEntry)
+	} else if err != nil {
+		logEntry.Error(err)
+	}
+
+	return logEntry.Status(status)
+}
+
+func mkdir(client DeviceClient, path string) (error, fuse.Status) {
+	result, err := client.RunCommand("mkdir", path)
+	if err != nil {
+		return err, fuse.EIO
+	}
+
+	if result != "" {
+		result = strings.TrimSuffix(result, "\r\n")
+		return errors.New(result), fuse.EACCES
+	}
+
+	return nil, fuse.OK
+}
+
+func (fs *AdbFileSystem) Rename(oldName, newName string, context *fuse.Context) fuse.Status {
+	oldName = convertClientPathToDevicePath(oldName)
+	newName = convertClientPathToDevicePath(newName)
+
+	logEntry := StartOperation("Rename", fmt.Sprintf("%s→%s", oldName, newName))
+	defer logEntry.FinishOperation(fs.config.Log)
+
+	device := fs.getQuickUseClient()
+	defer fs.recycleQuickUseClient(device)
+
+	err, status := rename(device, oldName, newName)
+	if util.HasErrCode(err, util.DeviceNotFound) {
+		return fs.handleDeviceNotFound(logEntry)
+	} else if err != nil {
+		logEntry.Error(err)
+	}
+
+	return logEntry.Status(status)
+}
+
+func rename(client DeviceClient, oldName, newName string) (error, fuse.Status) {
+	result, err := client.RunCommand("mv", oldName, newName)
+	if err != nil {
+		return err, fuse.EIO
+	}
+
+	if result != "" {
+		result = strings.TrimSuffix(result, "\r\n")
+		return errors.New(result), fuse.EACCES
+	}
+
+	return nil, fuse.OK
+}
+
+func (fs *AdbFileSystem) Rmdir(name string, context *fuse.Context) fuse.Status {
+	name = convertClientPathToDevicePath(name)
+
+	logEntry := StartOperation("Rename", name)
+	defer logEntry.FinishOperation(fs.config.Log)
+
+	device := fs.getQuickUseClient()
+	defer fs.recycleQuickUseClient(device)
+
+	err, status := rmdir(device, name)
+	if util.HasErrCode(err, util.DeviceNotFound) {
+		return fs.handleDeviceNotFound(logEntry)
+	} else if err != nil {
+		logEntry.Error(err)
+	}
+
+	return logEntry.Status(status)
+}
+
+func rmdir(client DeviceClient, name string) (error, fuse.Status) {
+	result, err := client.RunCommand("rmdir", name)
+	if err != nil {
+		return err, fuse.EIO
+	}
+
+	if result != "" {
+		result = strings.TrimSuffix(result, "\r\n")
+		return errors.New(result), fuse.EINVAL
+	}
+
+	return nil, fuse.OK
+}
+
+func (fs *AdbFileSystem) Unlink(name string, context *fuse.Context) fuse.Status {
+	name = convertClientPathToDevicePath(name)
+
+	logEntry := StartOperation("Unlink", name)
+	defer logEntry.FinishOperation(fs.config.Log)
+
+	device := fs.getQuickUseClient()
+	defer fs.recycleQuickUseClient(device)
+
+	err, status := unlink(device, name)
+	if util.HasErrCode(err, util.DeviceNotFound) {
+		return fs.handleDeviceNotFound(logEntry)
+	} else if err != nil {
+		logEntry.Error(err)
+	}
+
+	return logEntry.Status(status)
+}
+
+func unlink(client DeviceClient, name string) (error, fuse.Status) {
+	result, err := client.RunCommand("rm", name)
+	if err != nil {
+		return err, fuse.EIO
+	}
+
+	if result != "" {
+		result = strings.TrimSuffix(result, "\r\n")
+		return errors.New(result), fuse.EACCES
+	}
+
+	return nil, fuse.OK
 }
 
 func (fs *AdbFileSystem) getNewClient() (client DeviceClient) {
