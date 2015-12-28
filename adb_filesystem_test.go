@@ -1,6 +1,7 @@
 package adbfs
 
 import (
+	"fmt"
 	"os"
 	"testing"
 
@@ -174,6 +175,182 @@ func TestReadLink_PermissionDenied(t *testing.T) {
 
 	_, status := fs.Readlink("version_link.txt", newContext(1, 2, 3))
 	assert.Equal(t, fuse.EPERM, status)
+}
+
+func TestMkdir_Success(t *testing.T) {
+	dev := &delegateDeviceClient{
+		runCommand: func(cmd string, args []string) (string, error) {
+			if cmd == "mkdir" && args[0] == "/newdir" {
+				return "", nil
+			}
+			t.Fatal("invalid command:", cmd, args)
+			return "", nil
+		},
+	}
+	fs, err := NewAdbFileSystem(Config{
+		Mountpoint:    "",
+		ClientFactory: func() DeviceClient { return dev },
+		DeviceWatcher: MockDeviceWatcher{},
+		Log:           logrus.StandardLogger(),
+	})
+	assert.NoError(t, err)
+
+	status := fs.Mkdir("newdir", 0, newContext(1, 2, 3))
+	assertStatusOk(t, status)
+}
+
+func TestMkdir_Error(t *testing.T) {
+	dev := &delegateDeviceClient{
+		runCommand: func(cmd string, args []string) (string, error) {
+			if cmd == "mkdir" {
+				return fmt.Sprintf("mkdir failed for %s, Read-only file system", args[0]), nil
+			}
+			t.Fatal("invalid command:", cmd, args)
+			return "", nil
+		},
+	}
+	fs, err := NewAdbFileSystem(Config{
+		Mountpoint:    "",
+		ClientFactory: func() DeviceClient { return dev },
+		DeviceWatcher: MockDeviceWatcher{},
+		Log:           logrus.StandardLogger(),
+	})
+	assert.NoError(t, err)
+
+	status := fs.Mkdir("newdir", 0, newContext(1, 2, 3))
+	assert.Equal(t, fuse.EACCES, status)
+}
+
+func TestRename_Success(t *testing.T) {
+	dev := &delegateDeviceClient{
+		runCommand: func(cmd string, args []string) (string, error) {
+			if cmd == "mv" && args[0] == "/old" && args[1] == "/new" {
+				return "", nil
+			}
+			t.Fatal("invalid command:", cmd, args)
+			return "", nil
+		},
+	}
+	fs, err := NewAdbFileSystem(Config{
+		Mountpoint:    "",
+		ClientFactory: func() DeviceClient { return dev },
+		DeviceWatcher: MockDeviceWatcher{},
+		Log:           logrus.StandardLogger(),
+	})
+	assert.NoError(t, err)
+
+	status := fs.Rename("old", "new", newContext(1, 2, 3))
+	assertStatusOk(t, status)
+}
+
+func TestRename_Error(t *testing.T) {
+	dev := &delegateDeviceClient{
+		runCommand: func(cmd string, args []string) (string, error) {
+			if cmd == "mv" {
+				return fmt.Sprintf("mv failed for %s, Read-only file system", args[0]), nil
+			}
+			t.Fatal("invalid command:", cmd, args)
+			return "", nil
+		},
+	}
+	fs, err := NewAdbFileSystem(Config{
+		Mountpoint:    "",
+		ClientFactory: func() DeviceClient { return dev },
+		DeviceWatcher: MockDeviceWatcher{},
+		Log:           logrus.StandardLogger(),
+	})
+	assert.NoError(t, err)
+
+	status := fs.Rename("old", "new", newContext(1, 2, 3))
+	assert.Equal(t, fuse.EACCES, status)
+}
+
+func TestRmdir_Success(t *testing.T) {
+	dev := &delegateDeviceClient{
+		runCommand: func(cmd string, args []string) (string, error) {
+			if cmd == "rmdir" && args[0] == "/dir" {
+				return "", nil
+			}
+			t.Fatal("invalid command:", cmd, args)
+			return "", nil
+		},
+	}
+	fs, err := NewAdbFileSystem(Config{
+		Mountpoint:    "",
+		ClientFactory: func() DeviceClient { return dev },
+		DeviceWatcher: MockDeviceWatcher{},
+		Log:           logrus.StandardLogger(),
+	})
+	assert.NoError(t, err)
+
+	status := fs.Rmdir("dir", newContext(1, 2, 3))
+	assertStatusOk(t, status)
+}
+
+func TestRmdir_Error(t *testing.T) {
+	dev := &delegateDeviceClient{
+		runCommand: func(cmd string, args []string) (string, error) {
+			if cmd == "rmdir" {
+				return fmt.Sprintf("rmdir failed for %s, Read-only file system", args[0]), nil
+			}
+			t.Fatal("invalid command:", cmd, args)
+			return "", nil
+		},
+	}
+	fs, err := NewAdbFileSystem(Config{
+		Mountpoint:    "",
+		ClientFactory: func() DeviceClient { return dev },
+		DeviceWatcher: MockDeviceWatcher{},
+		Log:           logrus.StandardLogger(),
+	})
+	assert.NoError(t, err)
+
+	status := fs.Rmdir("dir", newContext(1, 2, 3))
+	assert.Equal(t, fuse.EINVAL, status)
+}
+
+func TestUnlink_Success(t *testing.T) {
+	dev := &delegateDeviceClient{
+		runCommand: func(cmd string, args []string) (string, error) {
+			if cmd == "rm" && args[0] == "/file.txt" {
+				return "", nil
+			}
+			t.Fatal("invalid command:", cmd, args)
+			return "", nil
+		},
+	}
+	fs, err := NewAdbFileSystem(Config{
+		Mountpoint:    "",
+		ClientFactory: func() DeviceClient { return dev },
+		DeviceWatcher: MockDeviceWatcher{},
+		Log:           logrus.StandardLogger(),
+	})
+	assert.NoError(t, err)
+
+	status := fs.Unlink("file.txt", newContext(1, 2, 3))
+	assertStatusOk(t, status)
+}
+
+func TestUnlink_Error(t *testing.T) {
+	dev := &delegateDeviceClient{
+		runCommand: func(cmd string, args []string) (string, error) {
+			if cmd == "rm" {
+				return fmt.Sprintf("rm failed for %s, Read-only file system", args[0]), nil
+			}
+			t.Fatal("invalid command:", cmd, args)
+			return "", nil
+		},
+	}
+	fs, err := NewAdbFileSystem(Config{
+		Mountpoint:    "",
+		ClientFactory: func() DeviceClient { return dev },
+		DeviceWatcher: MockDeviceWatcher{},
+		Log:           logrus.StandardLogger(),
+	})
+	assert.NoError(t, err)
+
+	status := fs.Unlink("file.txt", newContext(1, 2, 3))
+	assert.Equal(t, fuse.EACCES, status)
 }
 
 func newContext(uid, gid, pid int) *fuse.Context {
