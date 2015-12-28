@@ -25,7 +25,7 @@ func TestNewCachedDirEntries(t *testing.T) {
 func TestCachingDeviceClientStat_Miss(t *testing.T) {
 	client := &CachingDeviceClient{
 		DeviceClient: &delegateDeviceClient{
-			stat: func(path string, _ *LogEntry) (*goadb.DirEntry, error) {
+			stat: func(path string) (*goadb.DirEntry, error) {
 				if path == "/foo/bar" {
 					return &goadb.DirEntry{Name: "baz"}, nil
 				}
@@ -80,7 +80,7 @@ func TestCachingDeviceClientStat_HitNotExists(t *testing.T) {
 func TestCachingDeviceClientStat_Root(t *testing.T) {
 	client := &CachingDeviceClient{
 		DeviceClient: &delegateDeviceClient{
-			stat: func(path string, _ *LogEntry) (*goadb.DirEntry, error) {
+			stat: func(path string) (*goadb.DirEntry, error) {
 				if path == "/" {
 					return &goadb.DirEntry{Name: "/"}, nil
 				}

@@ -4,6 +4,8 @@ package adbfs
 import (
 	"fmt"
 	"io/ioutil"
+	"path/filepath"
+	"strings"
 
 	"github.com/Sirupsen/logrus"
 	"github.com/hanwen/go-fuse/fuse"
@@ -155,7 +157,7 @@ func (fs *AdbFileSystem) Readlink(name string, context *fuse.Context) (target st
 	device := fs.getQuickUseClient()
 	defer fs.recycleQuickUseClient(device)
 
-	result, err, status := device.ReadLink(name, fs.config.Mountpoint, logEntry)
+	result, err, status := readLink(device, name, fs.config.Mountpoint)
 	if util.HasErrCode(err, util.DeviceNotFound) {
 		return "", fs.handleDeviceNotFound(logEntry)
 	} else if err != nil {
@@ -164,6 +166,37 @@ func (fs *AdbFileSystem) Readlink(name string, context *fuse.Context) (target st
 
 	logEntry.Result("%s", result)
 	return result, logEntry.Status(status)
+}
+
+func readLink(client DeviceClient, path, rootPath string) (string, error, fuse.Status) {
+	// The sync protocol doesn't provide a way to read links.
+	// Some versions of Android have a readlink command that supports resolving recursively, but
+	// others (notably Marshmallow) don't, so don't try to do anything fancy (see issue #14).
+	// OSX Finder won't follow recursive symlinks in tree view, but it should resolve them if you
+	// open them.
+	result, err := client.RunCommand("readlink", path)
+	if util.HasErrCode(err, util.DeviceNotFound) {
+		return "", err, fuse.EIO
+	} else if err != nil {
+		return "", err, fuse.EIO
+	}
+	result = strings.TrimSuffix(result, "\r\n")
+
+	// Translate absolute links as relative to this mountpoint.
+	// Don't use path.Abs since we don't want to have platform-specific behavior.
+	if strings.HasPrefix(result, "/") {
+		result = filepath.Join(rootPath, result)
+	}
+
+	if result == ReadlinkInvalidArgument {
+		return "",
+			fmt.Errorf("not a link: readlink returned '%s' reading link: %s", result, path),
+			fuse.EINVAL
+	} else if result == ReadlinkPermissionDenied {
+		return "", nil, fuse.EPERM
+	}
+
+	return result, nil, fuse.OK
 }
 
 func (fs *AdbFileSystem) Open(name string, flags uint32, context *fuse.Context) (file nodefs.File, code fuse.Status) {

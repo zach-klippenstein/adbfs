@@ -25,7 +25,7 @@ func (MockDeviceWatcher) Shutdown() {
 
 func TestGetAttr_Root(t *testing.T) {
 	dev := &delegateDeviceClient{
-		stat: func(path string, log *LogEntry) (*goadb.DirEntry, error) {
+		stat: func(path string) (*goadb.DirEntry, error) {
 			return &goadb.DirEntry{
 				Name: "/",
 				Size: 0,
@@ -58,7 +58,7 @@ func TestGetAttr_Root(t *testing.T) {
 
 func TestGetAttr_RegularFile(t *testing.T) {
 	dev := &delegateDeviceClient{
-		stat: func(path string, log *LogEntry) (*goadb.DirEntry, error) {
+		stat: func(path string) (*goadb.DirEntry, error) {
 			return &goadb.DirEntry{
 				Name: "/version.txt",
 				Size: 42,
@@ -87,6 +87,93 @@ func TestGetAttr_RegularFile(t *testing.T) {
 	assert.False(t, attr.IsSocket())
 	assert.False(t, attr.IsSymlink())
 	assert.Equal(t, uint32(0444), attr.Mode&uint32(os.ModePerm))
+}
+
+func TestReadLink_AbsoluteTarget(t *testing.T) {
+	dev := &delegateDeviceClient{
+		runCommand: func(cmd string, args []string) (string, error) {
+			if cmd == "readlink" && args[0] == "/version_link.txt" {
+				return "/version.txt\r\n", nil
+			}
+			t.Fatal("invalid command:", cmd, args)
+			return "", nil
+		},
+	}
+	fs, err := NewAdbFileSystem(Config{
+		Mountpoint:    "/foo/bar",
+		ClientFactory: func() DeviceClient { return dev },
+		DeviceWatcher: MockDeviceWatcher{},
+		Log:           logrus.StandardLogger(),
+	})
+	assert.NoError(t, err)
+
+	target, status := fs.Readlink("version_link.txt", newContext(1, 2, 3))
+	//	assert.NoError(t, err)
+	assertStatusOk(t, status)
+	assert.Equal(t, "/foo/bar/version.txt", target)
+}
+
+func TestReadLink_RelativeTarget(t *testing.T) {
+	dev := &delegateDeviceClient{
+		runCommand: func(cmd string, args []string) (string, error) {
+			if cmd == "readlink" && args[0] == "/version_link.txt" {
+				return "version.txt\r\n", nil
+			}
+			t.Fatal("invalid command:", cmd, args)
+			return "", nil
+		},
+	}
+	fs, err := NewAdbFileSystem(Config{
+		Mountpoint:    "/foo/bar",
+		ClientFactory: func() DeviceClient { return dev },
+		DeviceWatcher: MockDeviceWatcher{},
+		Log:           logrus.StandardLogger(),
+	})
+	assert.NoError(t, err)
+
+	target, status := fs.Readlink("version_link.txt", newContext(1, 2, 3))
+	assertStatusOk(t, status)
+	assert.Equal(t, "version.txt", target)
+}
+
+func TestReadLink_NotALink(t *testing.T) {
+	dev := &delegateDeviceClient{
+		runCommand: func(cmd string, args []string) (string, error) {
+			return ReadlinkInvalidArgument, nil
+		},
+	}
+	fs, err := NewAdbFileSystem(Config{
+		Mountpoint:    "/foo/bar",
+		ClientFactory: func() DeviceClient { return dev },
+		DeviceWatcher: MockDeviceWatcher{},
+		Log:           logrus.StandardLogger(),
+	})
+	assert.NoError(t, err)
+
+	_, status := fs.Readlink("version_link.txt", newContext(1, 2, 3))
+	assert.Equal(t, fuse.EINVAL, status)
+}
+
+func TestReadLink_PermissionDenied(t *testing.T) {
+	dev := &delegateDeviceClient{
+		runCommand: func(cmd string, args []string) (string, error) {
+			if cmd == "readlink" && args[0] == "/version_link.txt" {
+				return ReadlinkPermissionDenied, nil
+			}
+			t.Fatal("invalid command:", cmd, args)
+			return "", nil
+		},
+	}
+	fs, err := NewAdbFileSystem(Config{
+		Mountpoint:    "/foo/bar",
+		ClientFactory: func() DeviceClient { return dev },
+		DeviceWatcher: MockDeviceWatcher{},
+		Log:           logrus.StandardLogger(),
+	})
+	assert.NoError(t, err)
+
+	_, status := fs.Readlink("version_link.txt", newContext(1, 2, 3))
+	assert.Equal(t, fuse.EPERM, status)
 }
 
 func newContext(uid, gid, pid int) *fuse.Context {

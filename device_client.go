@@ -1,17 +1,10 @@
 package adbfs
 
 import (
-	"fmt"
 	"io"
-	"path/filepath"
-	"strings"
 
-	"github.com/hanwen/go-fuse/fuse"
 	"github.com/zach-klippenstein/goadb"
-	"github.com/zach-klippenstein/goadb/util"
 )
-
-type DeviceShellRunner func(cmd string, args ...string) (string, error)
 
 // DeviceClient wraps goadb.DeviceClient for testing.
 type DeviceClient interface {
@@ -19,9 +12,7 @@ type DeviceClient interface {
 	Stat(path string, log *LogEntry) (*goadb.DirEntry, error)
 	ListDirEntries(path string, log *LogEntry) ([]*goadb.DirEntry, error)
 
-	// ReadLink returns the target of a symlink.
-	// If the target is relative, resolves it using rootPath.
-	ReadLink(path, rootPath string, log *LogEntry) (string, error, fuse.Status)
+	RunCommand(cmd string, args ...string) (string, error)
 }
 
 // goadbDeviceClient is an implementation of DeviceClient that wraps
@@ -59,40 +50,4 @@ func (c goadbDeviceClient) ListDirEntries(path string, _ *LogEntry) ([]*goadb.Di
 		return nil, err
 	}
 	return entries.ReadAll()
-}
-
-func (c goadbDeviceClient) ReadLink(path, rootPath string, _ *LogEntry) (string, error, fuse.Status) {
-	return readLinkFromDevice(path, rootPath, c.DeviceClient.RunCommand)
-}
-
-// readLinkFromDevice uses runner to execute a readlink command and parses the result.
-func readLinkFromDevice(path, rootPath string, runner DeviceShellRunner) (string, error, fuse.Status) {
-	// The sync protocol doesn't provide a way to read links.
-	// Some versions of Android have a readlink command that supports resolving recursively, but
-	// others (notably Marshmallow) don't, so don't try to do anything fancy (see issue #14).
-	// OSX Finder won't follow recursive symlinks in tree view, but it should resolve them if you
-	// open them.
-	result, err := runner("readlink", path)
-	if util.HasErrCode(err, util.DeviceNotFound) {
-		return "", err, fuse.EIO
-	} else if err != nil {
-		return "", err, fuse.EIO
-	}
-	result = strings.TrimSuffix(result, "\r\n")
-
-	// Translate absolute links as relative to this mountpoint.
-	// Don't use path.Abs since we don't want to have platform-specific behavior.
-	if strings.HasPrefix(result, "/") {
-		result = filepath.Join(rootPath, result)
-	}
-
-	if result == ReadlinkInvalidArgument {
-		return "",
-			fmt.Errorf("not a link: readlink returned '%s' reading link: %s", result, path),
-			fuse.EINVAL
-	} else if result == ReadlinkPermissionDenied {
-		return "", nil, fuse.EPERM
-	}
-
-	return result, nil, fuse.OK
 }
