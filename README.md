@@ -2,6 +2,12 @@
 
 A FUSE filesystem that uses [goadb](https://github.com/zach-klippenstein/goadb) to expose Android devices' filesystems.
 
+## Features
+
+* **Read-only**, non-root access to Android devices' filesystems through adb. Write access is planned for v1.0.
+* Automounter daemon that detects when devices are connected and mounts them under a configurable directory.
+* Communicates directly with adb server using goadb instead of delegating to the adb client command like most adb-based filesystems.
+
 ## Quick Start
 
 ### Installation
