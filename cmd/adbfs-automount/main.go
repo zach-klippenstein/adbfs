@@ -16,6 +16,8 @@ import (
 	"golang.org/x/net/context"
 )
 
+const appName = "adbfs-automount"
+
 var config cli.AutomountConfig
 
 func init() {
@@ -23,10 +25,12 @@ func init() {
 }
 
 func main() {
-	cli.Initialize("adbfs-automount", &config.BaseConfig)
+	cli.Initialize(appName, &config.BaseConfig)
+	eventLog := cli.NewEventLog(appName, "")
+	defer eventLog.Finish()
 
 	config.InitializePaths()
-	cli.Log.Infoln("using mount root", config.MountRoot)
+	eventLog.Infof("using mount root %s", config.MountRoot)
 
 	deviceWatcher := goadb.NewDeviceWatcher(config.ClientConfig())
 	defer deviceWatcher.Shutdown()
@@ -44,15 +48,19 @@ func main() {
 		select {
 		case event := <-deviceWatcher.C():
 			if event.CameOnline() {
-				cli.Log.Debugln("device connected:", event.Serial)
+				eventLog.Debugf("device connected: %s", event.Serial)
 				processes.Go(event.Serial, mountDevice)
+			} else if event.WentOffline() {
+				eventLog.Debugf("device disconnected: %s", event.Serial)
+			} else {
+				eventLog.Debugf("unknown device event: %+v", event)
 			}
 		case signal := <-signals:
-			cli.Log.Debugln("got signal", signal)
+			eventLog.Debugf("got signal %v", signal)
 			if signal == os.Kill || signal == os.Interrupt {
-				cli.Log.Info("shutting down all mount processes…")
+				eventLog.Infof("shutting down all mount processes…")
 				processes.Shutdown()
-				cli.Log.Info("all processes shutdown.")
+				eventLog.Infof("all processes shutdown.")
 				return
 			}
 		}
@@ -60,38 +68,41 @@ func main() {
 }
 
 func mountDevice(serial string, context context.Context) {
+	eventLog := cli.NewEventLog(appName, "device:"+serial)
+
 	defer func() {
-		cli.Log.Debugln("device mount process finished:", serial)
+		eventLog.Debugf("device mount process finished: %s", serial)
+		eventLog.Finish()
 	}()
 
 	adbClient := goadb.NewDeviceClient(config.ClientConfig(), goadb.DeviceWithSerial(serial))
 	deviceInfo, err := adbClient.GetDeviceInfo()
 	if err != nil {
-		cli.Log.Errorf("error getting device info for %s: %s", serial, err)
+		eventLog.Errorf("error getting device info for %s: %s", serial, err)
 		return
 	}
 
 	mountpoint, err := cli.NewMountpointForDevice(deviceInfo, config.MountRoot, serial)
 	if err != nil {
-		cli.Log.Errorf("error creating mountpoint for %s: %s", serial, err)
+		eventLog.Errorf("error creating mountpoint for %s: %s", serial, err)
 		return
 	}
 	defer RemoveLoggingError(mountpoint)
 
-	cli.Log.Infof("mounting %s on %s", serial, mountpoint)
+	eventLog.Infof("mounting %s on %s", serial, mountpoint)
 	cmd := NewMountProcess(config.PathToAdbfs, cli.AdbfsConfig{
 		BaseConfig:   config.BaseConfig,
 		DeviceSerial: serial,
 		Mountpoint:   mountpoint,
 	})
 
-	cli.Log.Debugln("launching adbfs:", CommandLine(cmd))
+	eventLog.Debugf("launching adbfs: %s", CommandLine(cmd))
 	if err := cmd.Start(); err != nil {
-		cli.Log.Errorln("error starting adbfs process:", err)
+		eventLog.Errorf("error starting adbfs process: %s", err)
 		return
 	}
 
-	cli.Log.Infof("device %s mounted with PID %d", serial, cmd.Process.Pid)
+	eventLog.Infof("device %s mounted with PID %d", serial, cmd.Process.Pid)
 
 	// If we're told to stop, kill the mount process.
 	go func() {
@@ -109,14 +120,14 @@ func mountDevice(serial string, context context.Context) {
 
 	if err := cmd.Wait(); err != nil {
 		if err, ok := err.(*exec.ExitError); ok {
-			cli.Log.Errorf("adbfs exited with %+v", err)
+			eventLog.Errorf("adbfs exited with %+v", err)
 		} else {
-			cli.Log.Errorf("lost connection with adbfs process:", err)
+			eventLog.Errorf("lost connection with adbfs process:", err)
 		}
 		return
 	}
 
-	cli.Log.Infof("mount process for device %s stopped", serial)
+	eventLog.Infof("mount process for device %s stopped", serial)
 }
 
 func RemoveLoggingError(path string) {
