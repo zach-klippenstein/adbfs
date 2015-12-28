@@ -68,9 +68,11 @@ func (c goadbDeviceClient) ReadLink(path, rootPath string, _ *LogEntry) (string,
 // readLinkFromDevice uses runner to execute a readlink command and parses the result.
 func readLinkFromDevice(path, rootPath string, runner DeviceShellRunner) (string, error, fuse.Status) {
 	// The sync protocol doesn't provide a way to read links.
-	// OSX doesn't follow recursive symlinks, so just resolve
-	// all symlinks all the way as a workaround.
-	result, err := runner("readlink", "-f", path)
+	// Some versions of Android have a readlink command that supports resolving recursively, but
+	// others (notably Marshmallow) don't, so don't try to do anything fancy (see issue #14).
+	// OSX Finder won't follow recursive symlinks in tree view, but it should resolve them if you
+	// open them.
+	result, err := runner("readlink", path)
 	if util.HasErrCode(err, util.DeviceNotFound) {
 		return "", err, fuse.EIO
 	} else if err != nil {
