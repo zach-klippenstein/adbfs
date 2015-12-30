@@ -62,7 +62,8 @@ func main() {
 	cache := initializeCache(config.CacheTtl)
 	clientConfig := config.ClientConfig()
 
-	fs := initializeFileSystem(clientConfig, absoluteMountpoint, cache, handleDeviceDisconnected)
+	fs := initializeFileSystem(clientConfig, absoluteMountpoint, cache)
+	go watchForDeviceDisconnected(clientConfig, config.DeviceSerial)
 
 	server, _, err = nodefs.MountRoot(absoluteMountpoint, fs.Root(), nil)
 	if err != nil {
@@ -102,26 +103,47 @@ func initializeCache(ttl time.Duration) fs.DirEntryCache {
 	return fs.NewDirEntryCache(ttl)
 }
 
-func initializeFileSystem(clientConfig goadb.ClientConfig, mountpoint string, cache fs.DirEntryCache, deviceNotFoundHandler func()) *pathfs.PathNodeFs {
+func initializeFileSystem(clientConfig goadb.ClientConfig, mountpoint string, cache fs.DirEntryCache) *pathfs.PathNodeFs {
 	clientFactory := fs.NewCachingDeviceClientFactory(cache,
-		fs.NewGoadbDeviceClientFactory(clientConfig, config.DeviceSerial))
-	deviceWatcher := goadb.NewDeviceWatcher(clientConfig)
+		fs.NewGoadbDeviceClientFactory(clientConfig, config.DeviceSerial, handleDeviceDisconnected))
 
 	var fsImpl pathfs.FileSystem
 	fsImpl, err := fs.NewAdbFileSystem(fs.Config{
-		DeviceSerial:          config.DeviceSerial,
-		Mountpoint:            mountpoint,
-		ClientFactory:         clientFactory,
-		Log:                   cli.Log,
-		ConnectionPoolSize:    config.ConnectionPoolSize,
-		DeviceWatcher:         deviceWatcher,
-		DeviceNotFoundHandler: deviceNotFoundHandler,
+		DeviceSerial:       config.DeviceSerial,
+		Mountpoint:         mountpoint,
+		ClientFactory:      clientFactory,
+		Log:                cli.Log,
+		ConnectionPoolSize: config.ConnectionPoolSize,
 	})
 	if err != nil {
 		cli.Log.Fatal(err)
 	}
 
 	return pathfs.NewPathNodeFs(fsImpl, nil)
+}
+
+func watchForDeviceDisconnected(clientConfig goadb.ClientConfig, serial string) {
+	watcher := goadb.NewDeviceWatcher(clientConfig)
+	defer watcher.Shutdown()
+
+	for {
+		select {
+		case event, ok := <-watcher.C():
+			if !ok {
+				// Channel closed.
+				break
+			}
+
+			if event.Serial == serial && event.WentOffline() {
+				cli.Log.Infoln("device disconnected:", serial)
+				handleDeviceDisconnected()
+			}
+		}
+	}
+
+	if err := watcher.Err(); err != nil {
+		cli.Log.Warn("DeviceWatcher disconnected with error:", err)
+	}
 }
 
 func startServer(startTimeout time.Duration) (<-chan struct{}, error) {
@@ -168,6 +190,8 @@ func unmountServer() {
 	}
 }
 
+// handleDeviceDisconnected is called either when the DeviceWatcher or the goadb.DeviceClient detect
+// a device is disconnected.
 func handleDeviceDisconnected() {
 	if !mounted.Value() || unmounted.Value() {
 		// May be called before mounting if device watcher detects disconnection.

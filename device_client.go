@@ -4,6 +4,7 @@ import (
 	"io"
 
 	"github.com/zach-klippenstein/goadb"
+	"github.com/zach-klippenstein/goadb/util"
 )
 
 // DeviceClient wraps goadb.DeviceClient for testing.
@@ -17,8 +18,11 @@ type DeviceClient interface {
 
 // goadbDeviceClient is an implementation of DeviceClient that wraps
 // a goadb.DeviceClient.
+// It also detects when any operations return an error indicating that the device was disconnected,
+// and calls deviceDisconnectedHandler to make it easier to handle disconnections in one spot.
 type goadbDeviceClient struct {
 	*goadb.DeviceClient
+	deviceDisconnectedHandler func()
 }
 
 // Error messages returned by the readlink command on Android devices.
@@ -28,26 +32,47 @@ const (
 	ReadlinkPermissionDenied = "readlink: Permission denied"
 )
 
-func NewGoadbDeviceClientFactory(clientConfig goadb.ClientConfig, deviceSerial string) DeviceClientFactory {
+func NewGoadbDeviceClientFactory(clientConfig goadb.ClientConfig, deviceSerial string, deviceDisconnectedHandler func()) DeviceClientFactory {
 	deviceDescriptor := goadb.DeviceWithSerial(deviceSerial)
 
 	return func() DeviceClient {
-		return goadbDeviceClient{goadb.NewDeviceClient(clientConfig, deviceDescriptor)}
+		return goadbDeviceClient{
+			DeviceClient:              goadb.NewDeviceClient(clientConfig, deviceDescriptor),
+			deviceDisconnectedHandler: deviceDisconnectedHandler,
+		}
 	}
 }
 
 func (c goadbDeviceClient) OpenRead(path string, _ *LogEntry) (io.ReadCloser, error) {
-	return c.DeviceClient.OpenRead(path)
+	r, err := c.DeviceClient.OpenRead(path)
+	if util.HasErrCode(err, util.DeviceNotFound) {
+		return nil, c.handleDeviceNotFound(err)
+	}
+	return r, err
 }
 
 func (c goadbDeviceClient) Stat(path string, _ *LogEntry) (*goadb.DirEntry, error) {
-	return c.DeviceClient.Stat(path)
+	e, err := c.DeviceClient.Stat(path)
+	if util.HasErrCode(err, util.DeviceNotFound) {
+		return nil, c.handleDeviceNotFound(err)
+	}
+	return e, err
 }
 
 func (c goadbDeviceClient) ListDirEntries(path string, _ *LogEntry) ([]*goadb.DirEntry, error) {
 	entries, err := c.DeviceClient.ListDirEntries(path)
 	if err != nil {
+		if util.HasErrCode(err, util.DeviceNotFound) {
+			c.handleDeviceNotFound(err)
+		}
 		return nil, err
 	}
 	return entries.ReadAll()
+}
+
+func (c goadbDeviceClient) handleDeviceNotFound(err error) error {
+	if c.deviceDisconnectedHandler != nil {
+		c.deviceDisconnectedHandler()
+	}
+	return err
 }
