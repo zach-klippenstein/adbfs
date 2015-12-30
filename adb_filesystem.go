@@ -12,7 +12,6 @@ import (
 	"github.com/hanwen/go-fuse/fuse"
 	"github.com/hanwen/go-fuse/fuse/nodefs"
 	"github.com/hanwen/go-fuse/fuse/pathfs"
-	"github.com/zach-klippenstein/goadb"
 	"github.com/zach-klippenstein/goadb/util"
 )
 
@@ -47,25 +46,12 @@ type Config struct {
 	// Used to initially populate the device client pool, and create clients for open files.
 	ClientFactory DeviceClientFactory
 
-	// Detects when the device is disconnected without filesystem accesses.
-	DeviceWatcher DeviceWatcher
-
 	Log *logrus.Logger
 
 	// Maximum number of concurrent connections for short-lived connections (does not restrict
 	// the number of concurrently open files).
 	// Values <1 are treated as 1.
 	ConnectionPoolSize int
-
-	// If non-nil, called when a util.Err with code DeviceNotFound is returned.
-	// Invoked on its own goroutine.
-	DeviceNotFoundHandler func()
-}
-
-type DeviceWatcher interface {
-	C() <-chan goadb.DeviceStateChangedEvent
-	Err() error
-	Shutdown()
 }
 
 type DeviceClientFactory func() DeviceClient
@@ -75,9 +61,6 @@ var _ pathfs.FileSystem = &AdbFileSystem{}
 func NewAdbFileSystem(config Config) (pathfs.FileSystem, error) {
 	if config.Log == nil {
 		panic("no logger specified for filesystem")
-	}
-	if config.DeviceWatcher == nil {
-		panic("no DeviceWatcher specified for filesystem")
 	}
 
 	if config.ConnectionPoolSize < 1 {
@@ -93,8 +76,6 @@ func NewAdbFileSystem(config Config) (pathfs.FileSystem, error) {
 		config:             config,
 		quickUseClientPool: clientPool,
 	}
-
-	go fs.watchForDeviceDisconnected()
 
 	return fs, nil
 }
@@ -114,9 +95,7 @@ func (fs *AdbFileSystem) GetAttr(name string, _ *fuse.Context) (attr *fuse.Attr,
 	defer fs.recycleQuickUseClient(device)
 
 	entry, err := device.Stat(name, logEntry)
-	if util.HasErrCode(err, util.DeviceNotFound) {
-		return nil, fs.handleDeviceNotFound(logEntry)
-	} else if util.HasErrCode(err, util.FileNoExistError) {
+	if util.HasErrCode(err, util.FileNoExistError) {
 		return nil, logEntry.Status(fuse.ENOENT)
 	} else if err != nil {
 		logEntry.Error(err)
@@ -138,9 +117,7 @@ func (fs *AdbFileSystem) OpenDir(name string, _ *fuse.Context) ([]fuse.DirEntry,
 	defer fs.recycleQuickUseClient(device)
 
 	entries, err := device.ListDirEntries(name, logEntry)
-	if util.HasErrCode(err, util.DeviceNotFound) {
-		return nil, fs.handleDeviceNotFound(logEntry)
-	} else if err != nil {
+	if err != nil {
 		logEntry.ErrorMsg(err, "getting directory list")
 		return nil, logEntry.Status(fuse.EIO)
 	}
@@ -159,9 +136,7 @@ func (fs *AdbFileSystem) Readlink(name string, context *fuse.Context) (target st
 	defer fs.recycleQuickUseClient(device)
 
 	result, err, status := readLink(device, name, fs.config.Mountpoint)
-	if util.HasErrCode(err, util.DeviceNotFound) {
-		return "", fs.handleDeviceNotFound(logEntry)
-	} else if err != nil {
+	if err != nil {
 		logEntry.Error(err)
 	}
 
@@ -176,9 +151,7 @@ func readLink(client DeviceClient, path, rootPath string) (string, error, fuse.S
 	// OSX Finder won't follow recursive symlinks in tree view, but it should resolve them if you
 	// open them.
 	result, err := client.RunCommand("readlink", path)
-	if util.HasErrCode(err, util.DeviceNotFound) {
-		return "", err, fuse.EIO
-	} else if err != nil {
+	if err != nil {
 		return "", err, fuse.EIO
 	}
 	result = strings.TrimSuffix(result, "\r\n")
@@ -213,18 +186,14 @@ func (fs *AdbFileSystem) Open(name string, flags uint32, context *fuse.Context) 
 
 	// TODO: Temporary dev implementation: read entire file into memory.
 	stream, err := client.OpenRead(name, logEntry)
-	if util.HasErrCode(err, util.DeviceNotFound) {
-		return nil, fs.handleDeviceNotFound(logEntry)
-	} else if err != nil {
+	if err != nil {
 		logEntry.ErrorMsg(err, "opening file stream on device")
 		return nil, logEntry.Status(fuse.EIO)
 	}
 	defer stream.Close()
 
 	data, err := ioutil.ReadAll(stream)
-	if util.HasErrCode(err, util.DeviceNotFound) {
-		return nil, fs.handleDeviceNotFound(logEntry)
-	} else if err != nil {
+	if err != nil {
 		logEntry.ErrorMsg(err, "reading data from file")
 		return nil, logEntry.Status(fuse.EIO)
 	}
@@ -249,9 +218,7 @@ func (fs *AdbFileSystem) Mkdir(name string, mode uint32, context *fuse.Context) 
 	defer fs.recycleQuickUseClient(device)
 
 	err, status := mkdir(device, name)
-	if util.HasErrCode(err, util.DeviceNotFound) {
-		return fs.handleDeviceNotFound(logEntry)
-	} else if err != nil {
+	if err != nil {
 		logEntry.Error(err)
 	}
 
@@ -283,9 +250,7 @@ func (fs *AdbFileSystem) Rename(oldName, newName string, context *fuse.Context) 
 	defer fs.recycleQuickUseClient(device)
 
 	err, status := rename(device, oldName, newName)
-	if util.HasErrCode(err, util.DeviceNotFound) {
-		return fs.handleDeviceNotFound(logEntry)
-	} else if err != nil {
+	if err != nil {
 		logEntry.Error(err)
 	}
 
@@ -316,9 +281,7 @@ func (fs *AdbFileSystem) Rmdir(name string, context *fuse.Context) fuse.Status {
 	defer fs.recycleQuickUseClient(device)
 
 	err, status := rmdir(device, name)
-	if util.HasErrCode(err, util.DeviceNotFound) {
-		return fs.handleDeviceNotFound(logEntry)
-	} else if err != nil {
+	if err != nil {
 		logEntry.Error(err)
 	}
 
@@ -349,9 +312,7 @@ func (fs *AdbFileSystem) Unlink(name string, context *fuse.Context) fuse.Status 
 	defer fs.recycleQuickUseClient(device)
 
 	err, status := unlink(device, name)
-	if util.HasErrCode(err, util.DeviceNotFound) {
-		return fs.handleDeviceNotFound(logEntry)
-	} else if err != nil {
+	if err != nil {
 		logEntry.Error(err)
 	}
 
@@ -384,40 +345,6 @@ func (fs *AdbFileSystem) getQuickUseClient() DeviceClient {
 
 func (fs *AdbFileSystem) recycleQuickUseClient(client DeviceClient) {
 	fs.quickUseClientPool <- client
-}
-
-func (fs *AdbFileSystem) watchForDeviceDisconnected() {
-	watcher := fs.config.DeviceWatcher
-	serial := fs.config.DeviceSerial
-	defer watcher.Shutdown()
-
-	for {
-		select {
-		case event, ok := <-watcher.C():
-			if !ok {
-				// Channel closed.
-				break
-			}
-
-			if event.Serial == serial && event.WentOffline() {
-				logEntry := StartOperation("DeviceDisconnected", "")
-				fs.handleDeviceNotFound(logEntry)
-				logEntry.FinishOperation(fs.config.Log)
-			}
-		}
-	}
-
-	if err := watcher.Err(); err != nil {
-		fs.config.Log.Warn("DeviceWatcher disconnected with error:", err)
-	}
-}
-
-func (fs *AdbFileSystem) handleDeviceNotFound(logEntry *LogEntry) fuse.Status {
-	logEntry.Result("device disconnected")
-	if fs.config.DeviceNotFoundHandler != nil {
-		go fs.config.DeviceNotFoundHandler()
-	}
-	return logEntry.Status(fuse.EIO)
 }
 
 func convertClientPathToDevicePath(name string) string {

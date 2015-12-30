@@ -11,19 +11,6 @@ import (
 	"github.com/zach-klippenstein/goadb"
 )
 
-type MockDeviceWatcher struct{}
-
-func (MockDeviceWatcher) C() <-chan goadb.DeviceStateChangedEvent {
-	return make(chan goadb.DeviceStateChangedEvent)
-}
-
-func (MockDeviceWatcher) Err() error {
-	return nil
-}
-
-func (MockDeviceWatcher) Shutdown() {
-}
-
 func TestGetAttr_Root(t *testing.T) {
 	dev := &delegateDeviceClient{
 		stat: func(path string) (*goadb.DirEntry, error) {
@@ -37,7 +24,6 @@ func TestGetAttr_Root(t *testing.T) {
 	fs, err := NewAdbFileSystem(Config{
 		Mountpoint:    "",
 		ClientFactory: func() DeviceClient { return dev },
-		DeviceWatcher: MockDeviceWatcher{},
 		Log:           logrus.StandardLogger(),
 	})
 	assert.NoError(t, err)
@@ -70,7 +56,6 @@ func TestGetAttr_RegularFile(t *testing.T) {
 	fs, err := NewAdbFileSystem(Config{
 		Mountpoint:    "",
 		ClientFactory: func() DeviceClient { return dev },
-		DeviceWatcher: MockDeviceWatcher{},
 		Log:           logrus.StandardLogger(),
 	})
 	assert.NoError(t, err)
@@ -103,7 +88,6 @@ func TestReadLink_AbsoluteTarget(t *testing.T) {
 	fs, err := NewAdbFileSystem(Config{
 		Mountpoint:    "/foo/bar",
 		ClientFactory: func() DeviceClient { return dev },
-		DeviceWatcher: MockDeviceWatcher{},
 		Log:           logrus.StandardLogger(),
 	})
 	assert.NoError(t, err)
@@ -127,7 +111,6 @@ func TestReadLink_RelativeTarget(t *testing.T) {
 	fs, err := NewAdbFileSystem(Config{
 		Mountpoint:    "/foo/bar",
 		ClientFactory: func() DeviceClient { return dev },
-		DeviceWatcher: MockDeviceWatcher{},
 		Log:           logrus.StandardLogger(),
 	})
 	assert.NoError(t, err)
@@ -146,7 +129,6 @@ func TestReadLink_NotALink(t *testing.T) {
 	fs, err := NewAdbFileSystem(Config{
 		Mountpoint:    "/foo/bar",
 		ClientFactory: func() DeviceClient { return dev },
-		DeviceWatcher: MockDeviceWatcher{},
 		Log:           logrus.StandardLogger(),
 	})
 	assert.NoError(t, err)
@@ -168,7 +150,6 @@ func TestReadLink_PermissionDenied(t *testing.T) {
 	fs, err := NewAdbFileSystem(Config{
 		Mountpoint:    "/foo/bar",
 		ClientFactory: func() DeviceClient { return dev },
-		DeviceWatcher: MockDeviceWatcher{},
 		Log:           logrus.StandardLogger(),
 	})
 	assert.NoError(t, err)
@@ -190,7 +171,6 @@ func TestMkdir_Success(t *testing.T) {
 	fs, err := NewAdbFileSystem(Config{
 		Mountpoint:    "",
 		ClientFactory: func() DeviceClient { return dev },
-		DeviceWatcher: MockDeviceWatcher{},
 		Log:           logrus.StandardLogger(),
 	})
 	assert.NoError(t, err)
@@ -212,7 +192,6 @@ func TestMkdir_Error(t *testing.T) {
 	fs, err := NewAdbFileSystem(Config{
 		Mountpoint:    "",
 		ClientFactory: func() DeviceClient { return dev },
-		DeviceWatcher: MockDeviceWatcher{},
 		Log:           logrus.StandardLogger(),
 	})
 	assert.NoError(t, err)
@@ -234,7 +213,6 @@ func TestRename_Success(t *testing.T) {
 	fs, err := NewAdbFileSystem(Config{
 		Mountpoint:    "",
 		ClientFactory: func() DeviceClient { return dev },
-		DeviceWatcher: MockDeviceWatcher{},
 		Log:           logrus.StandardLogger(),
 	})
 	assert.NoError(t, err)
@@ -256,7 +234,6 @@ func TestRename_Error(t *testing.T) {
 	fs, err := NewAdbFileSystem(Config{
 		Mountpoint:    "",
 		ClientFactory: func() DeviceClient { return dev },
-		DeviceWatcher: MockDeviceWatcher{},
 		Log:           logrus.StandardLogger(),
 	})
 	assert.NoError(t, err)
@@ -278,7 +255,6 @@ func TestRmdir_Success(t *testing.T) {
 	fs, err := NewAdbFileSystem(Config{
 		Mountpoint:    "",
 		ClientFactory: func() DeviceClient { return dev },
-		DeviceWatcher: MockDeviceWatcher{},
 		Log:           logrus.StandardLogger(),
 	})
 	assert.NoError(t, err)
@@ -300,7 +276,6 @@ func TestRmdir_Error(t *testing.T) {
 	fs, err := NewAdbFileSystem(Config{
 		Mountpoint:    "",
 		ClientFactory: func() DeviceClient { return dev },
-		DeviceWatcher: MockDeviceWatcher{},
 		Log:           logrus.StandardLogger(),
 	})
 	assert.NoError(t, err)
@@ -322,7 +297,6 @@ func TestUnlink_Success(t *testing.T) {
 	fs, err := NewAdbFileSystem(Config{
 		Mountpoint:    "",
 		ClientFactory: func() DeviceClient { return dev },
-		DeviceWatcher: MockDeviceWatcher{},
 		Log:           logrus.StandardLogger(),
 	})
 	assert.NoError(t, err)
@@ -344,7 +318,6 @@ func TestUnlink_Error(t *testing.T) {
 	fs, err := NewAdbFileSystem(Config{
 		Mountpoint:    "",
 		ClientFactory: func() DeviceClient { return dev },
-		DeviceWatcher: MockDeviceWatcher{},
 		Log:           logrus.StandardLogger(),
 	})
 	assert.NoError(t, err)
