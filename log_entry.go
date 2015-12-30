@@ -107,11 +107,8 @@ func (r *LogEntry) Status(status fuse.Status) fuse.Status {
 
 // CacheUsed records that a cache was used to attempt to retrieve a result.
 func (r *LogEntry) CacheUsed(hit bool) {
-	if r.cacheUsed {
-		panic(fmt.Sprintf("cache use already reported"))
-	}
 	r.cacheUsed = true
-	r.cacheHit = hit
+	r.cacheHit = r.cacheHit || hit
 }
 
 // FinishOperation should be deferred. It will log the duration of the operation, as well

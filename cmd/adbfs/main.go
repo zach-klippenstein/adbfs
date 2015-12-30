@@ -114,6 +114,7 @@ func initializeFileSystem(clientConfig goadb.ClientConfig, mountpoint string, ca
 		ClientFactory:      clientFactory,
 		Log:                cli.Log,
 		ConnectionPoolSize: config.ConnectionPoolSize,
+		DeviceRoot:         config.DeviceRoot,
 	})
 	if err != nil {
 		cli.Log.Fatal(err)
