@@ -24,6 +24,7 @@ type BaseConfig struct {
 	Verbose            bool
 	CacheTtl           time.Duration
 	ServeDebug         bool
+	DeviceRoot         string
 }
 
 const (
@@ -33,6 +34,7 @@ const (
 	LogLevelFlag           = "log"
 	VerboseFlag            = "verbose"
 	ServeDebugFlag         = "debug"
+	DeviceRootFlag         = "device-root"
 )
 
 func registerBaseFlags(config *BaseConfig) {
@@ -40,6 +42,7 @@ func registerBaseFlags(config *BaseConfig) {
 	kingpin.Flag(ConnectionPoolSizeFlag, "Size of the connection pool. Not used for open files.").Default(strconv.Itoa(DefaultPoolSize)).IntVar(&config.ConnectionPoolSize)
 	kingpin.Flag(CacheTtlFlag, "Duration to keep cached file info.").Default(DefaultCacheTtl.String()).DurationVar(&config.CacheTtl)
 	kingpin.Flag(ServeDebugFlag, "If set, will start an HTTP server to expose profiling and trace logs. Off by default.").BoolVar(&config.ServeDebug)
+	kingpin.Flag(DeviceRootFlag, "The device directory to mount.").Default("/sdcard").StringVar(&config.DeviceRoot)
 
 	logLevels := []string{
 		logrus.PanicLevel.String(),
@@ -63,6 +66,7 @@ func (c *BaseConfig) AsArgs() []string {
 		formatFlag(CacheTtlFlag, c.CacheTtl),
 		formatFlag(ServeDebugFlag, c.ServeDebug),
 		formatFlag(VerboseFlag, c.Verbose),
+		formatFlag(DeviceRootFlag, c.DeviceRoot),
 	}
 }
 

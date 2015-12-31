@@ -14,6 +14,7 @@ func TestAdbfsConfigAsArgs(t *testing.T) {
 		LogLevel:           "warn",
 		CacheTtl:           30 * time.Second,
 		ServeDebug:         true,
+		DeviceRoot:         "/abc",
 	}
 
 	expectedArgs := []string{
@@ -23,6 +24,7 @@ func TestAdbfsConfigAsArgs(t *testing.T) {
 		"--cachettl=30s",
 		"--debug",
 		"--no-verbose",
+		"--device-root=/abc",
 	}
 
 	assert.Equal(t, expectedArgs, config.AsArgs())
