@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
-	"log"
 	"os"
 	"path"
 	"path/filepath"
@@ -103,8 +102,8 @@ func NewAdbFileSystem(config Config) (pathfs.FileSystem, error) {
 }
 
 func (fs *AdbFileSystem) initialize() error {
-	logEntry := StartOperation("Initialize", "")
-	defer logEntry.FinishOperation(fs.config.Log)
+	logEntry := StartOperation("Initialize", "", fs.config.Log)
+	defer logEntry.FinishOperation()
 
 	if fs.config.DeviceRoot != "" {
 		// The mountpoint can't report itself as a symlink (it couldn't have any meaningful target).
@@ -165,8 +164,9 @@ func (fs *AdbFileSystem) GetAttr(name string, _ *fuse.Context) (attr *fuse.Attr,
 	name = fs.convertClientPathToDevicePath(name)
 	var err error
 
-	logEntry := StartOperation("GetAttr", name)
-	defer logEntry.FinishOperation(fs.config.Log)
+	logEntry := StartOperation("GetAttr", name, fs.config.Log)
+	// This is a very noisy operation on OSX.
+	defer logEntry.SuppressFinishOperation()
 
 	device := fs.getQuickUseClient()
 	defer fs.recycleQuickUseClient(device)
@@ -187,8 +187,8 @@ func (fs *AdbFileSystem) GetAttr(name string, _ *fuse.Context) (attr *fuse.Attr,
 func (fs *AdbFileSystem) OpenDir(name string, _ *fuse.Context) ([]fuse.DirEntry, fuse.Status) {
 	name = fs.convertClientPathToDevicePath(name)
 
-	logEntry := StartOperation("OpenDir", name)
-	defer logEntry.FinishOperation(fs.config.Log)
+	logEntry := StartOperation("OpenDir", name, fs.config.Log)
+	defer logEntry.FinishOperation()
 
 	device := fs.getQuickUseClient()
 	defer fs.recycleQuickUseClient(device)
@@ -206,8 +206,8 @@ func (fs *AdbFileSystem) OpenDir(name string, _ *fuse.Context) ([]fuse.DirEntry,
 func (fs *AdbFileSystem) Readlink(name string, context *fuse.Context) (target string, status fuse.Status) {
 	name = fs.convertClientPathToDevicePath(name)
 
-	logEntry := StartOperation("Readlink", name)
-	defer logEntry.FinishOperation(fs.config.Log)
+	logEntry := StartOperation("Readlink", name, fs.config.Log)
+	defer logEntry.FinishOperation()
 
 	device := fs.getQuickUseClient()
 	defer fs.recycleQuickUseClient(device)
@@ -243,11 +243,9 @@ func readLink(client DeviceClient, path string) (string, error) {
 	// OSX Finder won't follow recursive symlinks in tree view, but it should resolve them if you
 	// open them.
 	result, err := client.RunCommand("readlink", path)
-	log.Println("running command", "readlink", path)
 	if err != nil {
 		return "", err
 	}
-	log.Println("readLink:", result)
 	result = strings.TrimSuffix(result, "\r\n")
 
 	if result == ReadlinkInvalidArgument {
@@ -262,12 +260,11 @@ func readLink(client DeviceClient, path string) (string, error) {
 func (fs *AdbFileSystem) Open(name string, flags uint32, context *fuse.Context) (file nodefs.File, code fuse.Status) {
 	name = fs.convertClientPathToDevicePath(name)
 
-	logEntry := StartOperation("Open", name)
-	defer logEntry.FinishOperation(fs.config.Log)
+	logEntry := StartOperation("Open", name, fs.config.Log)
+	defer logEntry.FinishOperation()
 
 	// The client used to access this file will be used for an indeterminate time, so we don't want to use
 	// a client from the pool.
-
 	client := fs.getNewClient()
 
 	// TODO: Temporary dev implementation: read entire file into memory.
@@ -287,18 +284,18 @@ func (fs *AdbFileSystem) Open(name string, flags uint32, context *fuse.Context) 
 	logEntry.Result("read %d bytes", len(data))
 
 	file = nodefs.NewDataFile(data)
-	file = newLoggingFile(file, fs.config.Log)
+	file = newLoggingFile(file, name, fs.config.Log)
 
 	return file, logEntry.Status(fuse.OK)
 }
 
 // Mkdir creates name on the device with the default permissions.
-// mode is ignored.
-func (fs *AdbFileSystem) Mkdir(name string, mode uint32, context *fuse.Context) fuse.Status {
+// perms is ignored.
+func (fs *AdbFileSystem) Mkdir(name string, perms uint32, context *fuse.Context) fuse.Status {
 	name = fs.convertClientPathToDevicePath(name)
 
-	logEntry := StartOperation("Mkdir", name)
-	defer logEntry.FinishOperation(fs.config.Log)
+	logEntry := StartOperation("Mkdir", name, fs.config.Log)
+	defer logEntry.FinishOperation()
 
 	device := fs.getQuickUseClient()
 	defer fs.recycleQuickUseClient(device)
@@ -329,8 +326,8 @@ func (fs *AdbFileSystem) Rename(oldName, newName string, context *fuse.Context) 
 	oldName = fs.convertClientPathToDevicePath(oldName)
 	newName = fs.convertClientPathToDevicePath(newName)
 
-	logEntry := StartOperation("Rename", fmt.Sprintf("%s→%s", oldName, newName))
-	defer logEntry.FinishOperation(fs.config.Log)
+	logEntry := StartOperation("Rename", fmt.Sprintf("%s→%s", oldName, newName), fs.config.Log)
+	defer logEntry.FinishOperation()
 
 	device := fs.getQuickUseClient()
 	defer fs.recycleQuickUseClient(device)
@@ -360,8 +357,8 @@ func rename(client DeviceClient, oldName, newName string) (error, fuse.Status) {
 func (fs *AdbFileSystem) Rmdir(name string, context *fuse.Context) fuse.Status {
 	name = fs.convertClientPathToDevicePath(name)
 
-	logEntry := StartOperation("Rename", name)
-	defer logEntry.FinishOperation(fs.config.Log)
+	logEntry := StartOperation("Rename", name, fs.config.Log)
+	defer logEntry.FinishOperation()
 
 	device := fs.getQuickUseClient()
 	defer fs.recycleQuickUseClient(device)
@@ -391,8 +388,8 @@ func rmdir(client DeviceClient, name string) (error, fuse.Status) {
 func (fs *AdbFileSystem) Unlink(name string, context *fuse.Context) fuse.Status {
 	name = fs.convertClientPathToDevicePath(name)
 
-	logEntry := StartOperation("Unlink", name)
-	defer logEntry.FinishOperation(fs.config.Log)
+	logEntry := StartOperation("Unlink", name, fs.config.Log)
+	defer logEntry.FinishOperation()
 
 	device := fs.getQuickUseClient()
 	defer fs.recycleQuickUseClient(device)

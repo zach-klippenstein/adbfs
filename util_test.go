@@ -59,7 +59,7 @@ func TestLoggingFile(t *testing.T) {
 	}
 	flags := 42
 
-	file := newLoggingFile(nodefs.NewDataFile([]byte{}), log)
+	file := newLoggingFile(nodefs.NewDataFile([]byte{}), "", log)
 	code := file.Fsync(flags)
 	assert.False(t, code.Ok())
 
