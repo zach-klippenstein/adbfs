@@ -8,8 +8,14 @@ import (
 	"github.com/Sirupsen/logrus"
 	"github.com/hanwen/go-fuse/fuse/nodefs"
 	"github.com/stretchr/testify/assert"
+	"github.com/zach-klippenstein/adbfs/internal/cli"
 	"github.com/zach-klippenstein/goadb"
 )
+
+func init() {
+	// Disable most logging when running tests.
+	cli.Log.Level = logrus.WarnLevel
+}
 
 func TestAsFuseDirEntriesNoErr(t *testing.T) {
 	entries := []*goadb.DirEntry{
@@ -52,14 +58,14 @@ func TestSummarizeByteSlicesForLog(t *testing.T) {
 
 func TestLoggingFile(t *testing.T) {
 	var logOut bytes.Buffer
-	log := &logrus.Logger{
+	cli.Log = &logrus.Logger{
 		Out:       &logOut,
 		Formatter: new(logrus.JSONFormatter),
 		Level:     logrus.DebugLevel,
 	}
 	flags := 42
 
-	file := newLoggingFile(nodefs.NewDataFile([]byte{}), "", log)
+	file := newLoggingFile(nodefs.NewDataFile([]byte{}), "")
 	code := file.Fsync(flags)
 	assert.False(t, code.Ok())
 
