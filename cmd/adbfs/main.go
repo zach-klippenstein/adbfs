@@ -112,7 +112,6 @@ func initializeFileSystem(clientConfig goadb.ClientConfig, mountpoint string, ca
 		DeviceSerial:       config.DeviceSerial,
 		Mountpoint:         mountpoint,
 		ClientFactory:      clientFactory,
-		Log:                cli.Log,
 		ConnectionPoolSize: config.ConnectionPoolSize,
 		DeviceRoot:         config.DeviceRoot,
 	})

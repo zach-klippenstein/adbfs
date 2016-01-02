@@ -12,7 +12,7 @@ import (
 	"gopkg.in/alecthomas/kingpin.v2"
 )
 
-var Log *logrus.Logger
+var Log *logrus.Logger = logrus.StandardLogger()
 
 func init() {
 	kingpin.HelpFlag.Short('h')

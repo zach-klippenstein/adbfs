@@ -7,6 +7,7 @@ import (
 
 	"github.com/Sirupsen/logrus"
 	"github.com/hanwen/go-fuse/fuse"
+	"github.com/zach-klippenstein/adbfs/internal/cli"
 	"github.com/zach-klippenstein/goadb/util"
 	"golang.org/x/net/trace"
 )
@@ -34,8 +35,6 @@ Example Usage
 	}
 */
 type LogEntry struct {
-	log *logrus.Logger
-
 	name      string
 	path      string
 	args      string
@@ -54,12 +53,8 @@ var traceEntryFormatter = new(logrus.JSONFormatter)
 
 // StartOperation creates a new LogEntry with the current time.
 // Should be immediately followed by a deferred call to FinishOperation.
-func StartOperation(name string, path string, log *logrus.Logger) *LogEntry {
-	if log == nil {
-		panic("no logger")
-	}
+func StartOperation(name string, path string) *LogEntry {
 	return &LogEntry{
-		log:       log,
 		name:      name,
 		path:      path,
 		startTime: time.Now(),
@@ -67,13 +62,9 @@ func StartOperation(name string, path string, log *logrus.Logger) *LogEntry {
 	}
 }
 
-func StartFileOperation(name, path string, args string, log *logrus.Logger) *LogEntry {
-	if log == nil {
-		panic("no logger")
-	}
+func StartFileOperation(name, path string, args string) *LogEntry {
 	name = "File " + name
 	return &LogEntry{
-		log:       log,
 		name:      name,
 		path:      path,
 		args:      args,
@@ -133,8 +124,7 @@ func (r *LogEntry) SuppressFinishOperation() {
 }
 
 func (r *LogEntry) finishOperation(suppress bool) {
-	log := r.log
-	entry := log.WithFields(logrus.Fields{
+	entry := cli.Log.WithFields(logrus.Fields{
 		"duration_ms": calculateDurationMillis(r.startTime),
 		"status":      r.status,
 		"pid":         os.Getpid(),
@@ -158,7 +148,7 @@ func (r *LogEntry) finishOperation(suppress bool) {
 	}
 
 	if r.err != nil {
-		log.Errorln(util.ErrorWithCauseChain(r.err))
+		cli.Log.Errorln(util.ErrorWithCauseChain(r.err))
 	}
 
 	r.logTrace(entry)

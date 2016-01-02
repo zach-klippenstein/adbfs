@@ -6,7 +6,6 @@ import (
 	"os"
 	"sync/atomic"
 
-	"github.com/Sirupsen/logrus"
 	"github.com/hanwen/go-fuse/fuse"
 	"github.com/hanwen/go-fuse/fuse/nodefs"
 	"github.com/zach-klippenstein/goadb"
@@ -77,11 +76,11 @@ func osFileModeToFuseFileMode(inMode os.FileMode) (outMode uint32) {
 }
 
 // newLoggingFile returns a file object that logs all operations performed on it.
-func newLoggingFile(file nodefs.File, path string, log *logrus.Logger) nodefs.File {
+func newLoggingFile(file nodefs.File, path string) nodefs.File {
 	return &WrappingFile{
 		File: file,
 		BeforeCall: func(f *WrappingFile, method string, args ...interface{}) interface{} {
-			return StartFileOperation(method, path, formatArgsListForLog(args...), log)
+			return StartFileOperation(method, path, formatArgsListForLog(args...))
 		},
 		AfterCall: func(f *WrappingFile, call interface{}, status *fuse.Status, results ...interface{}) {
 			logEntry := call.(*LogEntry)

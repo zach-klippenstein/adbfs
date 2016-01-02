@@ -5,7 +5,6 @@ import (
 	"os"
 	"testing"
 
-	"github.com/Sirupsen/logrus"
 	"github.com/hanwen/go-fuse/fuse"
 	"github.com/stretchr/testify/assert"
 	"github.com/zach-klippenstein/goadb"
@@ -25,7 +24,6 @@ func TestGetAttr_Root(t *testing.T) {
 	fs, err := NewAdbFileSystem(Config{
 		Mountpoint:    "",
 		ClientFactory: func() DeviceClient { return dev },
-		Log:           logrus.StandardLogger(),
 	})
 	assert.NoError(t, err)
 
@@ -72,8 +70,7 @@ func TestGetAttr_CustomDeviceRoot(t *testing.T) {
 		fs, err := NewAdbFileSystem(Config{
 			Mountpoint:    "",
 			ClientFactory: func() DeviceClient { return dev },
-			Log:           logrus.StandardLogger(),
-			DeviceRoot:    root.DeviceRoot,
+			DeviceRoot: root.DeviceRoot,
 		})
 		assert.NoError(t, err)
 
@@ -115,8 +112,7 @@ func TestGetAttr_CustomDeviceRootSymlink(t *testing.T) {
 	fs, err := NewAdbFileSystem(Config{
 		Mountpoint:    "",
 		ClientFactory: func() DeviceClient { return dev },
-		Log:           logrus.StandardLogger(),
-		DeviceRoot:    "/0",
+		DeviceRoot: "/0",
 	})
 	assert.NoError(t, err)
 
@@ -196,7 +192,6 @@ func TestGetAttr_RegularFile(t *testing.T) {
 	fs, err := NewAdbFileSystem(Config{
 		Mountpoint:    "",
 		ClientFactory: func() DeviceClient { return dev },
-		Log:           logrus.StandardLogger(),
 	})
 	assert.NoError(t, err)
 
@@ -228,7 +223,6 @@ func TestReadLink_AbsoluteTarget(t *testing.T) {
 	fs, err := NewAdbFileSystem(Config{
 		Mountpoint:    "/foo/bar",
 		ClientFactory: func() DeviceClient { return dev },
-		Log:           logrus.StandardLogger(),
 	})
 	assert.NoError(t, err)
 
@@ -251,7 +245,6 @@ func TestReadLink_RelativeTarget(t *testing.T) {
 	fs, err := NewAdbFileSystem(Config{
 		Mountpoint:    "/foo/bar",
 		ClientFactory: func() DeviceClient { return dev },
-		Log:           logrus.StandardLogger(),
 	})
 	assert.NoError(t, err)
 
@@ -269,7 +262,6 @@ func TestReadLink_NotALink(t *testing.T) {
 	fs, err := NewAdbFileSystem(Config{
 		Mountpoint:    "/foo/bar",
 		ClientFactory: func() DeviceClient { return dev },
-		Log:           logrus.StandardLogger(),
 	})
 	assert.NoError(t, err)
 
@@ -290,7 +282,6 @@ func TestReadLink_PermissionDenied(t *testing.T) {
 	fs, err := NewAdbFileSystem(Config{
 		Mountpoint:    "/foo/bar",
 		ClientFactory: func() DeviceClient { return dev },
-		Log:           logrus.StandardLogger(),
 	})
 	assert.NoError(t, err)
 
@@ -311,7 +302,6 @@ func TestMkdir_Success(t *testing.T) {
 	fs, err := NewAdbFileSystem(Config{
 		Mountpoint:    "",
 		ClientFactory: func() DeviceClient { return dev },
-		Log:           logrus.StandardLogger(),
 	})
 	assert.NoError(t, err)
 
@@ -332,7 +322,6 @@ func TestMkdir_Error(t *testing.T) {
 	fs, err := NewAdbFileSystem(Config{
 		Mountpoint:    "",
 		ClientFactory: func() DeviceClient { return dev },
-		Log:           logrus.StandardLogger(),
 	})
 	assert.NoError(t, err)
 
@@ -353,7 +342,6 @@ func TestRename_Success(t *testing.T) {
 	fs, err := NewAdbFileSystem(Config{
 		Mountpoint:    "",
 		ClientFactory: func() DeviceClient { return dev },
-		Log:           logrus.StandardLogger(),
 	})
 	assert.NoError(t, err)
 
@@ -374,7 +362,6 @@ func TestRename_Error(t *testing.T) {
 	fs, err := NewAdbFileSystem(Config{
 		Mountpoint:    "",
 		ClientFactory: func() DeviceClient { return dev },
-		Log:           logrus.StandardLogger(),
 	})
 	assert.NoError(t, err)
 
@@ -395,7 +382,6 @@ func TestRmdir_Success(t *testing.T) {
 	fs, err := NewAdbFileSystem(Config{
 		Mountpoint:    "",
 		ClientFactory: func() DeviceClient { return dev },
-		Log:           logrus.StandardLogger(),
 	})
 	assert.NoError(t, err)
 
@@ -416,7 +402,6 @@ func TestRmdir_Error(t *testing.T) {
 	fs, err := NewAdbFileSystem(Config{
 		Mountpoint:    "",
 		ClientFactory: func() DeviceClient { return dev },
-		Log:           logrus.StandardLogger(),
 	})
 	assert.NoError(t, err)
 
@@ -437,7 +422,6 @@ func TestUnlink_Success(t *testing.T) {
 	fs, err := NewAdbFileSystem(Config{
 		Mountpoint:    "",
 		ClientFactory: func() DeviceClient { return dev },
-		Log:           logrus.StandardLogger(),
 	})
 	assert.NoError(t, err)
 
@@ -458,7 +442,6 @@ func TestUnlink_Error(t *testing.T) {
 	fs, err := NewAdbFileSystem(Config{
 		Mountpoint:    "",
 		ClientFactory: func() DeviceClient { return dev },
-		Log:           logrus.StandardLogger(),
 	})
 	assert.NoError(t, err)
 

@@ -15,10 +15,10 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/Sirupsen/logrus"
 	"github.com/hanwen/go-fuse/fuse"
 	"github.com/hanwen/go-fuse/fuse/nodefs"
 	"github.com/hanwen/go-fuse/fuse/pathfs"
+	"github.com/zach-klippenstein/adbfs/internal/cli"
 	"github.com/zach-klippenstein/goadb"
 	"github.com/zach-klippenstein/goadb/util"
 )
@@ -63,8 +63,6 @@ type Config struct {
 	// Used to initially populate the device client pool, and create clients for open files.
 	ClientFactory DeviceClientFactory
 
-	Log *logrus.Logger
-
 	// Maximum number of concurrent connections for short-lived connections (does not restrict
 	// the number of concurrently open files).
 	// Values <1 are treated as 1.
@@ -76,17 +74,13 @@ type DeviceClientFactory func() DeviceClient
 var _ pathfs.FileSystem = &AdbFileSystem{}
 
 func NewAdbFileSystem(config Config) (pathfs.FileSystem, error) {
-	if config.Log == nil {
-		panic("no logger specified for filesystem")
-	}
-
 	if config.ConnectionPoolSize < 1 {
 		config.ConnectionPoolSize = 1
 	}
-	config.Log.Infoln("connection pool size:", config.ConnectionPoolSize)
+	cli.Log.Infoln("connection pool size:", config.ConnectionPoolSize)
 
 	config.DeviceRoot = strings.TrimSuffix(config.DeviceRoot, "/")
-	config.Log.Infoln("device root:", config.DeviceRoot)
+	cli.Log.Infoln("device root:", config.DeviceRoot)
 
 	clientPool := make(chan DeviceClient, config.ConnectionPoolSize)
 	clientPool <- config.ClientFactory()
@@ -103,7 +97,7 @@ func NewAdbFileSystem(config Config) (pathfs.FileSystem, error) {
 }
 
 func (fs *AdbFileSystem) initialize() error {
-	logEntry := StartOperation("Initialize", "", fs.config.Log)
+	logEntry := StartOperation("Initialize", "")
 	defer logEntry.FinishOperation()
 
 	if fs.config.DeviceRoot != "" {
@@ -163,7 +157,7 @@ func (fs *AdbFileSystem) String() string {
 
 func (fs *AdbFileSystem) StatFs(name string) *fuse.StatfsOut {
 	name = fs.convertClientPathToDevicePath(name)
-	logEntry := StartOperation("StatFs", name, fs.config.Log)
+	logEntry := StartOperation("StatFs", name)
 	defer logEntry.SuppressFinishOperation()
 
 	device := fs.getQuickUseClient()
@@ -283,7 +277,7 @@ func parseStatfs(output string) (stat *fuse.StatfsOut, err error) {
 func (fs *AdbFileSystem) GetAttr(name string, _ *fuse.Context) (attr *fuse.Attr, status fuse.Status) {
 	name = fs.convertClientPathToDevicePath(name)
 
-	logEntry := StartOperation("GetAttr", name, fs.config.Log)
+	logEntry := StartOperation("GetAttr", name)
 	// This is a very noisy operation on OSX.
 	defer logEntry.SuppressFinishOperation()
 
@@ -313,7 +307,7 @@ func getAttr(name string, client DeviceClient, logEntry *LogEntry, attr *fuse.At
 func (fs *AdbFileSystem) OpenDir(name string, _ *fuse.Context) ([]fuse.DirEntry, fuse.Status) {
 	name = fs.convertClientPathToDevicePath(name)
 
-	logEntry := StartOperation("OpenDir", name, fs.config.Log)
+	logEntry := StartOperation("OpenDir", name)
 	defer logEntry.FinishOperation()
 
 	device := fs.getQuickUseClient()
@@ -349,7 +343,7 @@ func toFuseStatus(err error, logEntry *LogEntry) (status fuse.Status) {
 func (fs *AdbFileSystem) Readlink(name string, context *fuse.Context) (target string, status fuse.Status) {
 	name = fs.convertClientPathToDevicePath(name)
 
-	logEntry := StartOperation("Readlink", name, fs.config.Log)
+	logEntry := StartOperation("Readlink", name)
 	defer logEntry.FinishOperation()
 
 	device := fs.getQuickUseClient()
@@ -403,7 +397,7 @@ func readLink(client DeviceClient, path string) (string, error) {
 func (fs *AdbFileSystem) Access(name string, mode uint32, context *fuse.Context) fuse.Status {
 	name = fs.convertClientPathToDevicePath(name)
 
-	logEntry := StartOperation("Access", name, fs.config.Log)
+	logEntry := StartOperation("Access", name)
 	defer logEntry.SuppressFinishOperation()
 
 	device := fs.getQuickUseClient()
@@ -426,7 +420,7 @@ func (fs *AdbFileSystem) Access(name string, mode uint32, context *fuse.Context)
 
 func (fs *AdbFileSystem) Create(name string, rawFlags uint32, perms uint32, context *fuse.Context) (nodefs.File, fuse.Status) {
 	name = fs.convertClientPathToDevicePath(name)
-	logEntry := StartOperation("Create", name, fs.config.Log)
+	logEntry := StartOperation("Create", name)
 	defer logEntry.FinishOperation()
 	return nil, logEntry.Status(fuse.ENOSYS)
 }
@@ -434,7 +428,7 @@ func (fs *AdbFileSystem) Create(name string, rawFlags uint32, perms uint32, cont
 func (fs *AdbFileSystem) Open(name string, flags uint32, context *fuse.Context) (file nodefs.File, code fuse.Status) {
 	name = fs.convertClientPathToDevicePath(name)
 
-	logEntry := StartOperation("Open", name, fs.config.Log)
+	logEntry := StartOperation("Open", name)
 	defer logEntry.FinishOperation()
 
 	// The client used to access this file will be used for an indeterminate time, so we don't want to use
@@ -458,7 +452,7 @@ func (fs *AdbFileSystem) Open(name string, flags uint32, context *fuse.Context) 
 	logEntry.Result("read %d bytes", len(data))
 
 	file = nodefs.NewDataFile(data)
-	file = newLoggingFile(file, name, fs.config.Log)
+	file = newLoggingFile(file, name)
 
 	return file, logEntry.Status(fuse.OK)
 }
@@ -468,7 +462,7 @@ func (fs *AdbFileSystem) Open(name string, flags uint32, context *fuse.Context) 
 func (fs *AdbFileSystem) Mkdir(name string, perms uint32, context *fuse.Context) fuse.Status {
 	name = fs.convertClientPathToDevicePath(name)
 
-	logEntry := StartOperation("Mkdir", name, fs.config.Log)
+	logEntry := StartOperation("Mkdir", name)
 	defer logEntry.FinishOperation()
 
 	device := fs.getQuickUseClient()
@@ -500,7 +494,7 @@ func (fs *AdbFileSystem) Rename(oldName, newName string, context *fuse.Context) 
 	oldName = fs.convertClientPathToDevicePath(oldName)
 	newName = fs.convertClientPathToDevicePath(newName)
 
-	logEntry := StartOperation("Rename", fmt.Sprintf("%s→%s", oldName, newName), fs.config.Log)
+	logEntry := StartOperation("Rename", fmt.Sprintf("%s→%s", oldName, newName))
 	defer logEntry.FinishOperation()
 
 	device := fs.getQuickUseClient()
@@ -531,7 +525,7 @@ func rename(client DeviceClient, oldName, newName string) (error, fuse.Status) {
 func (fs *AdbFileSystem) Rmdir(name string, context *fuse.Context) fuse.Status {
 	name = fs.convertClientPathToDevicePath(name)
 
-	logEntry := StartOperation("Rename", name, fs.config.Log)
+	logEntry := StartOperation("Rename", name)
 	defer logEntry.FinishOperation()
 
 	device := fs.getQuickUseClient()
@@ -562,7 +556,7 @@ func rmdir(client DeviceClient, name string) (error, fuse.Status) {
 func (fs *AdbFileSystem) Unlink(name string, context *fuse.Context) fuse.Status {
 	name = fs.convertClientPathToDevicePath(name)
 
-	logEntry := StartOperation("Unlink", name, fs.config.Log)
+	logEntry := StartOperation("Unlink", name)
 	defer logEntry.FinishOperation()
 
 	device := fs.getQuickUseClient()
@@ -592,42 +586,42 @@ func unlink(client DeviceClient, name string) (error, fuse.Status) {
 
 func (fs *AdbFileSystem) Chmod(name string, mode uint32, context *fuse.Context) (code fuse.Status) {
 	name = fs.convertClientPathToDevicePath(name)
-	logEntry := StartOperation("Chmod", formatArgsListForLog(name, os.FileMode(mode)), fs.config.Log)
+	logEntry := StartOperation("Chmod", formatArgsListForLog(name, os.FileMode(mode)))
 	defer logEntry.FinishOperation()
 	return logEntry.Status(fuse.ENOSYS)
 }
 
 func (fs *AdbFileSystem) Chown(name string, uid uint32, gid uint32, context *fuse.Context) (code fuse.Status) {
 	name = fs.convertClientPathToDevicePath(name)
-	logEntry := StartOperation("Chown", fmt.Sprintf("%s uid=%d, gid=%d", name, uid, gid), fs.config.Log)
+	logEntry := StartOperation("Chown", fmt.Sprintf("%s uid=%d, gid=%d", name, uid, gid))
 	defer logEntry.FinishOperation()
 	return logEntry.Status(fuse.ENOSYS)
 }
 
 func (fs *AdbFileSystem) GetXAttr(name string, attribute string, context *fuse.Context) (data []byte, code fuse.Status) {
 	name = fs.convertClientPathToDevicePath(name)
-	logEntry := StartOperation("GetXAttr", formatArgsListForLog(name, attribute), fs.config.Log)
+	logEntry := StartOperation("GetXAttr", formatArgsListForLog(name, attribute))
 	defer logEntry.FinishOperation()
 	return nil, logEntry.Status(fuse.ENOSYS)
 }
 
 func (fs *AdbFileSystem) ListXAttr(name string, context *fuse.Context) (attributes []string, code fuse.Status) {
 	name = fs.convertClientPathToDevicePath(name)
-	logEntry := StartOperation("ListXAttr", formatArgsListForLog(name), fs.config.Log)
+	logEntry := StartOperation("ListXAttr", formatArgsListForLog(name))
 	defer logEntry.FinishOperation()
 	return nil, logEntry.Status(fuse.ENOSYS)
 }
 
 func (fs *AdbFileSystem) RemoveXAttr(name string, attr string, context *fuse.Context) fuse.Status {
 	name = fs.convertClientPathToDevicePath(name)
-	logEntry := StartOperation("RemoveXAttr", formatArgsListForLog(name, attr), fs.config.Log)
+	logEntry := StartOperation("RemoveXAttr", formatArgsListForLog(name, attr))
 	defer logEntry.FinishOperation()
 	return logEntry.Status(fuse.ENOSYS)
 }
 
 func (fs *AdbFileSystem) SetXAttr(name string, attr string, data []byte, flags int, context *fuse.Context) fuse.Status {
 	name = fs.convertClientPathToDevicePath(name)
-	logEntry := StartOperation("SetXAttr", formatArgsListForLog(name, attr, data, flags), fs.config.Log)
+	logEntry := StartOperation("SetXAttr", formatArgsListForLog(name, attr, data, flags))
 	defer logEntry.FinishOperation()
 	return logEntry.Status(fuse.ENOSYS)
 }
@@ -635,7 +629,7 @@ func (fs *AdbFileSystem) SetXAttr(name string, attr string, data []byte, flags i
 func (fs *AdbFileSystem) Link(oldName string, newName string, context *fuse.Context) fuse.Status {
 	oldName = fs.convertClientPathToDevicePath(oldName)
 	newName = fs.convertClientPathToDevicePath(newName)
-	logEntry := StartOperation("Link", formatArgsListForLog(oldName, newName), fs.config.Log)
+	logEntry := StartOperation("Link", formatArgsListForLog(oldName, newName))
 	defer logEntry.FinishOperation()
 	return logEntry.Status(fuse.ENOSYS)
 }
@@ -643,28 +637,28 @@ func (fs *AdbFileSystem) Link(oldName string, newName string, context *fuse.Cont
 func (fs *AdbFileSystem) Symlink(oldName string, newName string, context *fuse.Context) fuse.Status {
 	oldName = fs.convertClientPathToDevicePath(oldName)
 	newName = fs.convertClientPathToDevicePath(newName)
-	logEntry := StartOperation("Symlink", formatArgsListForLog(oldName, newName), fs.config.Log)
+	logEntry := StartOperation("Symlink", formatArgsListForLog(oldName, newName))
 	defer logEntry.FinishOperation()
 	return logEntry.Status(fuse.ENOSYS)
 }
 
 func (fs *AdbFileSystem) Mknod(name string, mode uint32, dev uint32, context *fuse.Context) fuse.Status {
 	name = fs.convertClientPathToDevicePath(name)
-	logEntry := StartOperation("Mknod", formatArgsListForLog(name, mode, dev), fs.config.Log)
+	logEntry := StartOperation("Mknod", formatArgsListForLog(name, mode, dev))
 	defer logEntry.FinishOperation()
 	return logEntry.Status(fuse.ENOSYS)
 }
 
 func (fs *AdbFileSystem) Truncate(name string, size uint64, context *fuse.Context) (code fuse.Status) {
 	name = fs.convertClientPathToDevicePath(name)
-	logEntry := StartOperation("Truncate", formatArgsListForLog(name, size), fs.config.Log)
+	logEntry := StartOperation("Truncate", formatArgsListForLog(name, size))
 	defer logEntry.FinishOperation()
 	return logEntry.Status(fuse.ENOSYS)
 }
 
 func (fs *AdbFileSystem) Utimens(name string, Atime *time.Time, Mtime *time.Time, context *fuse.Context) (code fuse.Status) {
 	name = fs.convertClientPathToDevicePath(name)
-	logEntry := StartOperation("Utimens", formatArgsListForLog(name, Atime, Mtime), fs.config.Log)
+	logEntry := StartOperation("Utimens", formatArgsListForLog(name, Atime, Mtime))
 	defer logEntry.FinishOperation()
 	return logEntry.Status(fuse.ENOSYS)
 }
@@ -680,7 +674,7 @@ func (fs *AdbFileSystem) SetDebug(debug bool) {
 
 func (fs *AdbFileSystem) getNewClient() (client DeviceClient) {
 	client = fs.config.ClientFactory()
-	fs.config.Log.Debug("created device client:", client)
+	cli.Log.Debug("created device client:", client)
 	return
 }
 
