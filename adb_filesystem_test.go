@@ -8,18 +8,14 @@ import (
 	"github.com/hanwen/go-fuse/fuse"
 	"github.com/stretchr/testify/assert"
 	"github.com/zach-klippenstein/goadb"
-	"github.com/zach-klippenstein/goadb/util"
 )
 
 func TestGetAttr_Root(t *testing.T) {
 	dev := &delegateDeviceClient{
-		stat: func(path string) (*goadb.DirEntry, error) {
-			return &goadb.DirEntry{
-				Name: "/",
-				Size: 0,
-				Mode: os.ModeDir | 0755,
-			}, nil
-		},
+		stat: statFiles(&goadb.DirEntry{
+			Name: "/",
+			Mode: os.ModeDir | 0755,
+		}),
 	}
 	fs, err := NewAdbFileSystem(Config{
 		Mountpoint:    "",
@@ -56,21 +52,15 @@ func TestGetAttr_CustomDeviceRoot(t *testing.T) {
 		{"/sdcard/", "/sdcard", "/"},
 	} {
 		dev := &delegateDeviceClient{
-			stat: func(path string) (*goadb.DirEntry, error) {
-				if path == root.DevicePath {
-					return &goadb.DirEntry{
-						Name: root.DevicePath,
-						Size: 0,
-						Mode: os.ModeDir | 0755,
-					}, nil
-				}
-				return nil, util.Errorf(util.FileNoExistError, "")
-			},
+			stat: statFiles(&goadb.DirEntry{
+				Name: root.DevicePath,
+				Mode: os.ModeDir | 0755,
+			}),
 		}
 		fs, err := NewAdbFileSystem(Config{
 			Mountpoint:    "",
 			ClientFactory: func() DeviceClient { return dev },
-			DeviceRoot: root.DeviceRoot,
+			DeviceRoot:    root.DeviceRoot,
 		})
 		assert.NoError(t, err)
 
@@ -81,22 +71,13 @@ func TestGetAttr_CustomDeviceRoot(t *testing.T) {
 
 func TestGetAttr_CustomDeviceRootSymlink(t *testing.T) {
 	dev := &delegateDeviceClient{
-		stat: func(path string) (*goadb.DirEntry, error) {
-			switch path {
-			case "/0":
-				return &goadb.DirEntry{
-					Name: path,
-					Mode: os.ModeSymlink,
-				}, nil
-			case "/1":
-				return &goadb.DirEntry{
-					Name: path,
-					Mode: os.ModeDir,
-				}, nil
-			default:
-				return nil, util.Errorf(util.FileNoExistError, "")
-			}
-		},
+		stat: statFiles(&goadb.DirEntry{
+			Name: "/0",
+			Mode: os.ModeSymlink,
+		}, &goadb.DirEntry{
+			Name: "/1",
+			Mode: os.ModeDir,
+		}),
 		runCommand: func(cmd string, args []string) (string, error) {
 			if cmd != "readlink" {
 				t.Fatal("invalid command:", cmd, args)
@@ -112,7 +93,7 @@ func TestGetAttr_CustomDeviceRootSymlink(t *testing.T) {
 	fs, err := NewAdbFileSystem(Config{
 		Mountpoint:    "",
 		ClientFactory: func() DeviceClient { return dev },
-		DeviceRoot: "/0",
+		DeviceRoot:    "/0",
 	})
 	assert.NoError(t, err)
 
@@ -123,22 +104,16 @@ func TestGetAttr_CustomDeviceRootSymlink(t *testing.T) {
 
 func TestReadLinkRecursively_Success(t *testing.T) {
 	dev := &delegateDeviceClient{
-		stat: func(path string) (*goadb.DirEntry, error) {
-			switch path {
-			case "/0", "/1":
-				return &goadb.DirEntry{
-					Name: path,
-					Mode: os.ModeSymlink,
-				}, nil
-			case "/2":
-				return &goadb.DirEntry{
-					Name: path,
-					Mode: os.ModeDir,
-				}, nil
-			default:
-				return nil, util.Errorf(util.FileNoExistError, "")
-			}
-		},
+		stat: statFiles(&goadb.DirEntry{
+			Name: "/0",
+			Mode: os.ModeSymlink,
+		}, &goadb.DirEntry{
+			Name: "/1",
+			Mode: os.ModeSymlink,
+		}, &goadb.DirEntry{
+			Name: "/2",
+			Mode: os.ModeDir,
+		}),
 		runCommand: func(cmd string, args []string) (string, error) {
 			if cmd != "readlink" {
 				t.Fatal("invalid command:", cmd, args)
@@ -161,12 +136,10 @@ func TestReadLinkRecursively_Success(t *testing.T) {
 
 func TestReadLinkRecursively_MaxDepth(t *testing.T) {
 	dev := &delegateDeviceClient{
-		stat: func(path string) (*goadb.DirEntry, error) {
-			return &goadb.DirEntry{
-				Name: path,
-				Mode: os.ModeSymlink,
-			}, nil
-		},
+		stat: statFiles(&goadb.DirEntry{
+			Name: "/0",
+			Mode: os.ModeSymlink,
+		}),
 		runCommand: func(cmd string, args []string) (string, error) {
 			if cmd != "readlink" {
 				t.Fatal("invalid command:", cmd, args)
@@ -181,13 +154,11 @@ func TestReadLinkRecursively_MaxDepth(t *testing.T) {
 
 func TestGetAttr_RegularFile(t *testing.T) {
 	dev := &delegateDeviceClient{
-		stat: func(path string) (*goadb.DirEntry, error) {
-			return &goadb.DirEntry{
-				Name: "/version.txt",
-				Size: 42,
-				Mode: 0444,
-			}, nil
-		},
+		stat: statFiles(&goadb.DirEntry{
+			Name: "/version.txt",
+			Size: 42,
+			Mode: 0444,
+		}),
 	}
 	fs, err := NewAdbFileSystem(Config{
 		Mountpoint:    "",
@@ -447,6 +418,30 @@ func TestUnlink_Error(t *testing.T) {
 
 	status := fs.Unlink("file.txt", newContext())
 	assert.Equal(t, fuse.EACCES, status)
+}
+
+func TestOpen_ExistSuccess(t *testing.T) {
+	dev := &delegateDeviceClient{
+		stat: statFiles(&goadb.DirEntry{
+			Name: "/file",
+			Size: 512,
+			Mode: 0600,
+		}),
+		openRead: openReadString("foobar"),
+	}
+	fs, err := NewAdbFileSystem(Config{
+		Mountpoint:    "",
+		ClientFactory: func() DeviceClient { return dev },
+	})
+	assert.NoError(t, err)
+
+	file, status := fs.Open("file", uint32(os.O_RDONLY), newContext())
+	assertStatusOk(t, status)
+
+	adbFile := getAdbFile(file)
+	assert.NotNil(t, adbFile)
+	assert.Equal(t, "/file", adbFile.FileBuffer.Path)
+	assert.True(t, adbFile.Flags.CanRead())
 }
 
 func TestParseStatfs(t *testing.T) {
