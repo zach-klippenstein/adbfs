@@ -48,8 +48,8 @@ func asFuseDirEntries(entries []*goadb.DirEntry) (result []fuse.DirEntry) {
 }
 
 // asFuseAttr creates a fuse Attr struct that contains the information from a goadb DirEntry.
-func asFuseAttr(entry *goadb.DirEntry) *fuse.Attr {
-	return &fuse.Attr{
+func asFuseAttr(entry *goadb.DirEntry, attr *fuse.Attr) {
+	*attr = fuse.Attr{
 		Mode:  osFileModeToFuseFileMode(entry.Mode),
 		Size:  uint64(entry.Size),
 		Mtime: uint64(entry.ModifiedAt.Unix()),

@@ -29,7 +29,7 @@ func TestGetAttr_Root(t *testing.T) {
 	})
 	assert.NoError(t, err)
 
-	attr, status := fs.GetAttr("", newContext(1, 2, 3))
+	attr, status := fs.GetAttr("", newContext())
 	assertStatusOk(t, status)
 	assert.NotNil(t, attr)
 
@@ -77,7 +77,7 @@ func TestGetAttr_CustomDeviceRoot(t *testing.T) {
 		})
 		assert.NoError(t, err)
 
-		_, status := fs.GetAttr(root.RequestedPath, newContext(1, 2, 3))
+		_, status := fs.GetAttr(root.RequestedPath, newContext())
 		assert.Equal(t, fuse.OK, status, "%v", root)
 	}
 }
@@ -120,7 +120,7 @@ func TestGetAttr_CustomDeviceRootSymlink(t *testing.T) {
 	})
 	assert.NoError(t, err)
 
-	entry, status := fs.GetAttr("", newContext(1, 2, 3))
+	entry, status := fs.GetAttr("", newContext())
 	assertStatusOk(t, status)
 	assert.False(t, entry.IsSymlink())
 }
@@ -158,7 +158,7 @@ func TestReadLinkRecursively_Success(t *testing.T) {
 		},
 	}
 
-	target, err := readLinkRecursively(dev, "/0", &LogEntry{})
+	target, _, err := readLinkRecursively(dev, "/0", &LogEntry{})
 	assert.NoError(t, err)
 	assert.Equal(t, "/2", target)
 }
@@ -179,7 +179,7 @@ func TestReadLinkRecursively_MaxDepth(t *testing.T) {
 		},
 	}
 
-	_, err := readLinkRecursively(dev, "/0", &LogEntry{})
+	_, _, err := readLinkRecursively(dev, "/0", &LogEntry{})
 	assert.Equal(t, ErrLinkTooDeep, err)
 }
 
@@ -200,7 +200,7 @@ func TestGetAttr_RegularFile(t *testing.T) {
 	})
 	assert.NoError(t, err)
 
-	attr, status := fs.GetAttr("version.txt", newContext(1, 2, 3))
+	attr, status := fs.GetAttr("version.txt", newContext())
 	assertStatusOk(t, status)
 	assert.NotNil(t, attr)
 
@@ -232,7 +232,7 @@ func TestReadLink_AbsoluteTarget(t *testing.T) {
 	})
 	assert.NoError(t, err)
 
-	target, status := fs.Readlink("version_link.txt", newContext(1, 2, 3))
+	target, status := fs.Readlink("version_link.txt", newContext())
 	//	assert.NoError(t, err)
 	assertStatusOk(t, status)
 	assert.Equal(t, "/foo/bar/version.txt", target)
@@ -255,7 +255,7 @@ func TestReadLink_RelativeTarget(t *testing.T) {
 	})
 	assert.NoError(t, err)
 
-	target, status := fs.Readlink("version_link.txt", newContext(1, 2, 3))
+	target, status := fs.Readlink("version_link.txt", newContext())
 	assertStatusOk(t, status)
 	assert.Equal(t, "version.txt", target)
 }
@@ -273,7 +273,7 @@ func TestReadLink_NotALink(t *testing.T) {
 	})
 	assert.NoError(t, err)
 
-	_, status := fs.Readlink("version_link.txt", newContext(1, 2, 3))
+	_, status := fs.Readlink("version_link.txt", newContext())
 	assert.Equal(t, fuse.EINVAL, status)
 }
 
@@ -294,7 +294,7 @@ func TestReadLink_PermissionDenied(t *testing.T) {
 	})
 	assert.NoError(t, err)
 
-	_, status := fs.Readlink("version_link.txt", newContext(1, 2, 3))
+	_, status := fs.Readlink("version_link.txt", newContext())
 	assert.Equal(t, fuse.EPERM, status)
 }
 
@@ -315,7 +315,7 @@ func TestMkdir_Success(t *testing.T) {
 	})
 	assert.NoError(t, err)
 
-	status := fs.Mkdir("newdir", 0, newContext(1, 2, 3))
+	status := fs.Mkdir("newdir", 0, newContext())
 	assertStatusOk(t, status)
 }
 
@@ -336,7 +336,7 @@ func TestMkdir_Error(t *testing.T) {
 	})
 	assert.NoError(t, err)
 
-	status := fs.Mkdir("newdir", 0, newContext(1, 2, 3))
+	status := fs.Mkdir("newdir", 0, newContext())
 	assert.Equal(t, fuse.EACCES, status)
 }
 
@@ -357,7 +357,7 @@ func TestRename_Success(t *testing.T) {
 	})
 	assert.NoError(t, err)
 
-	status := fs.Rename("old", "new", newContext(1, 2, 3))
+	status := fs.Rename("old", "new", newContext())
 	assertStatusOk(t, status)
 }
 
@@ -378,7 +378,7 @@ func TestRename_Error(t *testing.T) {
 	})
 	assert.NoError(t, err)
 
-	status := fs.Rename("old", "new", newContext(1, 2, 3))
+	status := fs.Rename("old", "new", newContext())
 	assert.Equal(t, fuse.EACCES, status)
 }
 
@@ -399,7 +399,7 @@ func TestRmdir_Success(t *testing.T) {
 	})
 	assert.NoError(t, err)
 
-	status := fs.Rmdir("dir", newContext(1, 2, 3))
+	status := fs.Rmdir("dir", newContext())
 	assertStatusOk(t, status)
 }
 
@@ -420,7 +420,7 @@ func TestRmdir_Error(t *testing.T) {
 	})
 	assert.NoError(t, err)
 
-	status := fs.Rmdir("dir", newContext(1, 2, 3))
+	status := fs.Rmdir("dir", newContext())
 	assert.Equal(t, fuse.EINVAL, status)
 }
 
@@ -441,7 +441,7 @@ func TestUnlink_Success(t *testing.T) {
 	})
 	assert.NoError(t, err)
 
-	status := fs.Unlink("file.txt", newContext(1, 2, 3))
+	status := fs.Unlink("file.txt", newContext())
 	assertStatusOk(t, status)
 }
 
@@ -462,17 +462,41 @@ func TestUnlink_Error(t *testing.T) {
 	})
 	assert.NoError(t, err)
 
-	status := fs.Unlink("file.txt", newContext(1, 2, 3))
+	status := fs.Unlink("file.txt", newContext())
 	assert.Equal(t, fuse.EACCES, status)
 }
 
-func newContext(uid, gid, pid int) *fuse.Context {
+func TestParseStatfs(t *testing.T) {
+	_, err := parseStatfs(``)
+	assert.EqualError(t, err, "no output")
+
+	stat, err := parseStatfs(`Namelen: a`)
+	assert.EqualError(t, err, "invalid value for Namelen: a")
+
+	stat, err = parseStatfs(`  File: "/sdcard/Pictures"
+    ID: 0        Namelen: 255     Type: UNKNOWN
+Block size: 4096
+Blocks: Total: 1269664    Free: 1209578    Available: 1205482
+Inodes: Total: 327680     Free: 326438`)
+	assert.NoError(t, err)
+	assert.Equal(t, fuse.StatfsOut{
+		NameLen: 255,
+		Bsize:   4096,
+		Blocks:  1269664,
+		Bfree:   1209578,
+		Bavail:  1205482,
+		Files:   327680,
+		Ffree:   326438,
+	}, *stat)
+}
+
+func newContext() *fuse.Context {
 	return &fuse.Context{
 		Owner: fuse.Owner{
-			Uid: uint32(uid),
-			Gid: uint32(gid),
+			Uid: uint32(1),
+			Gid: uint32(2),
 		},
-		Pid: uint32(pid),
+		Pid: uint32(3),
 	}
 }
 
