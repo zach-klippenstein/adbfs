@@ -48,8 +48,8 @@ func asFuseDirEntries(entries []*goadb.DirEntry) (result []fuse.DirEntry) {
 }
 
 // asFuseAttr creates a fuse Attr struct that contains the information from a goadb DirEntry.
-func asFuseAttr(entry *goadb.DirEntry) *fuse.Attr {
-	return &fuse.Attr{
+func asFuseAttr(entry *goadb.DirEntry, attr *fuse.Attr) {
+	*attr = fuse.Attr{
 		Mode:  osFileModeToFuseFileMode(entry.Mode),
 		Size:  uint64(entry.Size),
 		Mtime: uint64(entry.ModifiedAt.Unix()),
@@ -77,42 +77,41 @@ func osFileModeToFuseFileMode(inMode os.FileMode) (outMode uint32) {
 }
 
 // newLoggingFile returns a file object that logs all operations performed on it.
-func newLoggingFile(file nodefs.File, log *logrus.Logger) nodefs.File {
-	formatList := func(list []interface{}) string {
-		if len(list) == 0 {
-			return ""
-		}
-
-		var buffer bytes.Buffer
-		buffer.WriteRune('[')
-		for i, item := range list {
-			fmt.Fprintf(&buffer, "%#v", item)
-
-			if i < len(list)-1 {
-				buffer.WriteString(", ")
-			}
-		}
-		buffer.WriteRune(']')
-		return buffer.String()
-	}
-
+func newLoggingFile(file nodefs.File, path string, log *logrus.Logger) nodefs.File {
 	return &WrappingFile{
 		File: file,
 		BeforeCall: func(f *WrappingFile, method string, args ...interface{}) interface{} {
-			summarizeForLog(args)
-			return StartFileOperation(method, formatList(args))
+			return StartFileOperation(method, path, formatArgsListForLog(args...), log)
 		},
 		AfterCall: func(f *WrappingFile, call interface{}, status *fuse.Status, results ...interface{}) {
-			summarizeForLog(results)
-
 			logEntry := call.(*LogEntry)
 			if status != nil {
 				logEntry.Status(*status)
 			}
-			logEntry.Result(formatList(results))
-			logEntry.FinishOperation(log)
+			logEntry.Result(formatArgsListForLog(results...))
+			logEntry.FinishOperation()
 		},
 	}
+}
+
+func formatArgsListForLog(args ...interface{}) string {
+	if len(args) == 0 {
+		return ""
+	}
+
+	summarizeForLog(args)
+
+	var buffer bytes.Buffer
+	buffer.WriteRune('[')
+	for i, item := range args {
+		fmt.Fprintf(&buffer, "%#v", item)
+
+		if i < len(args)-1 {
+			buffer.WriteString(", ")
+		}
+	}
+	buffer.WriteRune(']')
+	return buffer.String()
 }
 
 // summarizeByteSlices replaces all elements of the passed slice that are of type []byte with

@@ -34,6 +34,8 @@ Example Usage
 	}
 */
 type LogEntry struct {
+	log *logrus.Logger
+
 	name      string
 	path      string
 	args      string
@@ -52,8 +54,12 @@ var traceEntryFormatter = new(logrus.JSONFormatter)
 
 // StartOperation creates a new LogEntry with the current time.
 // Should be immediately followed by a deferred call to FinishOperation.
-func StartOperation(name string, path string) *LogEntry {
+func StartOperation(name string, path string, log *logrus.Logger) *LogEntry {
+	if log == nil {
+		panic("no logger")
+	}
 	return &LogEntry{
+		log:       log,
 		name:      name,
 		path:      path,
 		startTime: time.Now(),
@@ -61,10 +67,15 @@ func StartOperation(name string, path string) *LogEntry {
 	}
 }
 
-func StartFileOperation(name string, args string) *LogEntry {
+func StartFileOperation(name, path string, args string, log *logrus.Logger) *LogEntry {
+	if log == nil {
+		panic("no logger")
+	}
 	name = "File " + name
 	return &LogEntry{
+		log:       log,
 		name:      name,
+		path:      path,
 		args:      args,
 		startTime: time.Now(),
 		trace:     trace.New(name, args),
@@ -73,8 +84,8 @@ func StartFileOperation(name string, args string) *LogEntry {
 
 // ErrorMsg records a failure result.
 // Panics if called more than once.
-func (r *LogEntry) ErrorMsg(err error, msg string) {
-	r.Error(fmt.Errorf("%s: %v", msg, err))
+func (r *LogEntry) ErrorMsg(err error, msg string, args ...interface{}) {
+	r.Error(fmt.Errorf("%s: %v", fmt.Sprintf(msg, args...), util.ErrorWithCauseChain(err)))
 }
 
 // Error records a failure result.
@@ -113,7 +124,16 @@ func (r *LogEntry) CacheUsed(hit bool) {
 
 // FinishOperation should be deferred. It will log the duration of the operation, as well
 // as any results and/or errors.
-func (r *LogEntry) FinishOperation(log *logrus.Logger) {
+func (r *LogEntry) FinishOperation() {
+	r.finishOperation(false)
+}
+
+func (r *LogEntry) SuppressFinishOperation() {
+	r.finishOperation(true)
+}
+
+func (r *LogEntry) finishOperation(suppress bool) {
+	log := r.log
 	entry := log.WithFields(logrus.Fields{
 		"duration_ms": calculateDurationMillis(r.startTime),
 		"status":      r.status,
@@ -133,7 +153,9 @@ func (r *LogEntry) FinishOperation(log *logrus.Logger) {
 		entry = entry.WithField("cache_hit", r.cacheHit)
 	}
 
-	entry.Debug(r.name)
+	if !suppress {
+		entry.Debug(r.name)
+	}
 
 	if r.err != nil {
 		log.Errorln(util.ErrorWithCauseChain(r.err))
