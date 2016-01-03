@@ -1,4 +1,3 @@
-// TODO: Implement better file read.
 package adbfs
 
 import (
@@ -6,7 +5,6 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path"
 	"path/filepath"
@@ -27,9 +25,8 @@ import (
 const MaxLinkResolveDepth = 64
 
 var (
-	ErrLinkTooDeep  = util.AssertionErrorf("link recursion too deep")
-	ErrNoPermission = util.AssertionErrorf("permission denied")
-	ErrNotALink     = util.AssertionErrorf("not a link")
+	ErrLinkTooDeep = util.AssertionErrorf("link recursion too deep")
+	ErrNotALink    = util.AssertionErrorf("not a link")
 )
 
 /*
@@ -47,6 +44,8 @@ type AdbFileSystem struct {
 	// Client pool for short-lived connections (e.g. listing devices, running commands).
 	// Clients for long-lived connections like file transfers should be created as needed.
 	quickUseClientPool chan DeviceClient
+
+	openFiles *OpenFiles
 }
 
 // Config stores arguments used by AdbFileSystem.
@@ -88,6 +87,10 @@ func NewAdbFileSystem(config Config) (pathfs.FileSystem, error) {
 	fs := &AdbFileSystem{
 		config:             config,
 		quickUseClientPool: clientPool,
+		openFiles: NewOpenFiles(OpenFilesOptions{
+			DeviceSerial:  config.DeviceSerial,
+			ClientFactory: config.ClientFactory,
+		}),
 	}
 	if err := fs.initialize(); err != nil {
 		return nil, err
@@ -325,11 +328,13 @@ func (fs *AdbFileSystem) OpenDir(name string, _ *fuse.Context) ([]fuse.DirEntry,
 
 func toFuseStatus(err error, logEntry *LogEntry) (status fuse.Status) {
 	switch {
+	case err == nil:
+		status = fuse.OK
 	case err == ErrLinkTooDeep:
 		status = fuse.Status(syscall.ELOOP)
 	case err == ErrNotALink:
 		status = fuse.EINVAL
-	case err == ErrNoPermission:
+	case err == os.ErrPermission:
 		status = fuse.EPERM
 	case util.HasErrCode(err, util.FileNoExistError):
 		status = fuse.ENOENT
@@ -353,7 +358,7 @@ func (fs *AdbFileSystem) Readlink(name string, context *fuse.Context) (target st
 	if err == ErrNotALink {
 		status = fuse.EINVAL
 		err = nil
-	} else if err == ErrNoPermission {
+	} else if err == os.ErrPermission {
 		status = fuse.EPERM
 		err = nil
 	} else if err != nil {
@@ -388,7 +393,7 @@ func readLink(client DeviceClient, path string) (string, error) {
 	if result == ReadlinkInvalidArgument {
 		return "", ErrNotALink
 	} else if result == ReadlinkPermissionDenied {
-		return "", ErrNoPermission
+		return "", os.ErrPermission
 	}
 
 	return result, nil
@@ -400,6 +405,11 @@ func (fs *AdbFileSystem) Access(name string, mode uint32, context *fuse.Context)
 	logEntry := StartOperation("Access", name)
 	defer logEntry.SuppressFinishOperation()
 
+	if mode&fuse.W_OK == fuse.W_OK {
+		logEntry.Result("writes not supported")
+		return logEntry.Status(fuse.EACCES)
+	}
+
 	device := fs.getQuickUseClient()
 	defer fs.recycleQuickUseClient(device)
 
@@ -407,11 +417,6 @@ func (fs *AdbFileSystem) Access(name string, mode uint32, context *fuse.Context)
 	name, _, err := readLinkRecursively(device, name, logEntry)
 	if err != nil {
 		return toFuseStatus(err, logEntry)
-	}
-
-	if mode&fuse.W_OK == fuse.W_OK {
-		logEntry.Result("writes not supported")
-		return logEntry.Status(fuse.EACCES)
 	}
 
 	logEntry.Result("target %s exists, read/execute access permitted", name)
@@ -425,36 +430,27 @@ func (fs *AdbFileSystem) Create(name string, rawFlags uint32, perms uint32, cont
 	return nil, logEntry.Status(fuse.ENOSYS)
 }
 
-func (fs *AdbFileSystem) Open(name string, flags uint32, context *fuse.Context) (file nodefs.File, code fuse.Status) {
+func (fs *AdbFileSystem) Open(name string, flags uint32, context *fuse.Context) (nodefs.File, fuse.Status) {
 	name = fs.convertClientPathToDevicePath(name)
 
 	logEntry := StartOperation("Open", name)
 	defer logEntry.FinishOperation()
 
-	// The client used to access this file will be used for an indeterminate time, so we don't want to use
-	// a client from the pool.
-	client := fs.getNewClient()
+	file, err := fs.createFile(name, FileOpenFlags(flags), logEntry)
+	logEntry.Result("%s", file)
+	return file, toFuseStatus(err, logEntry)
+}
 
-	// TODO: Temporary dev implementation: read entire file into memory.
-	stream, err := client.OpenRead(name, logEntry)
+func (fs *AdbFileSystem) createFile(name string, flags FileOpenFlags, logEntry *LogEntry) (nodefs.File, error) {
+	openFile, err := fs.openFiles.GetOrLoad(name, flags, logEntry)
 	if err != nil {
-		logEntry.ErrorMsg(err, "opening file stream on device")
-		return nil, logEntry.Status(fuse.EIO)
-	}
-	defer stream.Close()
-
-	data, err := ioutil.ReadAll(stream)
-	if err != nil {
-		logEntry.ErrorMsg(err, "reading data from file")
-		return nil, logEntry.Status(fuse.EIO)
+		return nil, err
 	}
 
-	logEntry.Result("read %d bytes", len(data))
-
-	file = nodefs.NewDataFile(data)
-	file = newLoggingFile(file, name)
-
-	return file, logEntry.Status(fuse.OK)
+	return NewAdbFile(AdbFileOpenOptions{
+		FileBuffer: openFile,
+		Flags:      flags,
+	}), nil
 }
 
 // Mkdir creates name on the device with the default permissions.
