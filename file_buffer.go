@@ -59,7 +59,7 @@ func NewFileBuffer(initialFlags FileOpenFlags, opts FileBufferOptions, logEntry 
 
 func (f *FileBuffer) initialize(flags FileOpenFlags, logEntry *LogEntry) (err error) {
 	if !flags.CanRead() || flags.Contains(O_TRUNC) || flags.Contains(O_APPEND) {
-		return os.ErrPermission
+		return ErrNotPermitted
 	}
 
 	if _, err = f.Client.Stat(f.Path, logEntry); err != nil {

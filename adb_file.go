@@ -63,16 +63,20 @@ func (f *AdbFile) Read(buf []byte, off int64) (fuse.ReadResult, fuse.Status) {
 	defer logEntry.FinishOperation()
 
 	if !f.Flags.CanRead() {
-		return readResultError(fuse.EPERM), logEntry.Status(fuse.EPERM)
+		// This is not a user-permission denial, it's a filesystem config denial, so don't use EACCES.
+		return readError(ErrNotPermitted, logEntry)
 	}
 
 	n, err := f.FileBuffer.ReadAt(buf, off)
 	if err == io.EOF {
 		err = nil
 	}
+	if err != nil {
+		return readError(err, logEntry)
+	}
 
 	logEntry.Result("read %d bytes", n)
-	return fuse.ReadResultData(buf[:n]), toFuseStatus(err, logEntry)
+	return fuse.ReadResultData(buf[:n]), toFuseStatusLog(OK, logEntry)
 }
 
 // Fsync re-reads the file from the device into memory.
@@ -81,7 +85,7 @@ func (f *AdbFile) Fsync(flags int) fuse.Status {
 	defer logEntry.FinishOperation()
 
 	err := f.FileBuffer.Sync(logEntry)
-	return toFuseStatus(err, logEntry)
+	return toFuseStatusLog(err, logEntry)
 }
 
 func (f *AdbFile) GetAttr(out *fuse.Attr) fuse.Status {
@@ -90,5 +94,6 @@ func (f *AdbFile) GetAttr(out *fuse.Attr) fuse.Status {
 
 	// This operation doesn't require a read flag.
 
-	return logEntry.Status(getAttr(f.FileBuffer.Path, f.FileBuffer.Client, logEntry, out))
+	err := getAttr(f.FileBuffer.Path, f.FileBuffer.Client, logEntry, out)
+	return toFuseStatusLog(err, logEntry)
 }

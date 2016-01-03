@@ -85,7 +85,7 @@ func newLoggingFile(file nodefs.File, path string) nodefs.File {
 		AfterCall: func(f *WrappingFile, call interface{}, status *fuse.Status, results ...interface{}) {
 			logEntry := call.(*LogEntry)
 			if status != nil {
-				logEntry.Status(*status)
+				logEntry.Status(fuseStatusToErrno(*status))
 			}
 			logEntry.Result(formatArgsListForLog(results...))
 			logEntry.FinishOperation()

@@ -2,7 +2,6 @@ package adbfs
 
 import (
 	"io"
-	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -44,7 +43,7 @@ func TestNewFileBuffer_OpenWithoutReadFailure(t *testing.T) {
 			Client: &delegateDeviceClient{},
 		}, &LogEntry{})
 
-		assert.Equal(t, os.ErrPermission, err)
+		assert.Equal(t, ErrNotPermitted, err)
 	}
 }
 

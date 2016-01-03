@@ -24,11 +24,6 @@ import (
 // 64 symlinks ought to be deep enough for anybody.
 const MaxLinkResolveDepth = 64
 
-var (
-	ErrLinkTooDeep = util.AssertionErrorf("link recursion too deep")
-	ErrNotALink    = util.AssertionErrorf("not a link")
-)
-
 /*
 AdbFileSystem is an implementation of fuse.pathfs.FileSystem that exposes the filesystem
 on an adb device.
@@ -288,23 +283,21 @@ func (fs *AdbFileSystem) GetAttr(name string, _ *fuse.Context) (attr *fuse.Attr,
 	defer fs.recycleQuickUseClient(device)
 
 	attr = new(fuse.Attr)
-	return attr, logEntry.Status(getAttr(name, device, logEntry, attr))
+	err := getAttr(name, device, logEntry, attr)
+	return attr, toFuseStatusLog(err, logEntry)
 }
 
 // getAttr performs the actual stat call on a client, converts errors to status, and converts
 // the DirEntry to a fuse.Attr. It also sets the LogEntry result.
-func getAttr(name string, client DeviceClient, logEntry *LogEntry, attr *fuse.Attr) fuse.Status {
+func getAttr(name string, client DeviceClient, logEntry *LogEntry, attr *fuse.Attr) error {
 	entry, err := client.Stat(name, logEntry)
-	if util.HasErrCode(err, util.FileNoExistError) {
-		return fuse.ENOENT
-	} else if err != nil {
-		logEntry.Error(err)
-		return fuse.EIO
+	if err != nil {
+		return err
 	}
 
 	asFuseAttr(entry, attr)
 	logEntry.Result("entry=%v, attr=%v", entry, attr)
-	return fuse.OK
+	return nil
 }
 
 func (fs *AdbFileSystem) OpenDir(name string, _ *fuse.Context) ([]fuse.DirEntry, fuse.Status) {
@@ -318,31 +311,11 @@ func (fs *AdbFileSystem) OpenDir(name string, _ *fuse.Context) ([]fuse.DirEntry,
 
 	entries, err := device.ListDirEntries(name, logEntry)
 	if err != nil {
-		logEntry.ErrorMsg(err, "getting directory list")
-		return nil, logEntry.Status(fuse.EIO)
+		return nil, toFuseStatusLog(err, logEntry)
 	}
 
 	result := asFuseDirEntries(entries)
-	return result, logEntry.Status(fuse.OK)
-}
-
-func toFuseStatus(err error, logEntry *LogEntry) (status fuse.Status) {
-	switch {
-	case err == nil:
-		status = fuse.OK
-	case err == ErrLinkTooDeep:
-		status = fuse.Status(syscall.ELOOP)
-	case err == ErrNotALink:
-		status = fuse.EINVAL
-	case err == os.ErrPermission:
-		status = fuse.EPERM
-	case util.HasErrCode(err, util.FileNoExistError):
-		status = fuse.ENOENT
-	default:
-		logEntry.Error(err)
-		status = fuse.EIO
-	}
-	return logEntry.Status(status)
+	return result, toFuseStatusLog(OK, logEntry)
 }
 
 func (fs *AdbFileSystem) Readlink(name string, context *fuse.Context) (target string, status fuse.Status) {
@@ -355,27 +328,17 @@ func (fs *AdbFileSystem) Readlink(name string, context *fuse.Context) (target st
 	defer fs.recycleQuickUseClient(device)
 
 	target, err := readLink(device, name)
-	if err == ErrNotALink {
-		status = fuse.EINVAL
-		err = nil
-	} else if err == os.ErrPermission {
-		status = fuse.EPERM
-		err = nil
-	} else if err != nil {
-		status = fuse.EIO
-	}
-	if err != nil {
-		logEntry.Error(err)
+	if err == nil {
+		// Translate absolute links as relative to this mountpoint.
+		// Don't use path.Abs since we don't want to have platform-specific behavior.
+		if strings.HasPrefix(target, "/") {
+			target = filepath.Join(fs.config.Mountpoint, target)
+		}
+
+		logEntry.Result("%s", target)
 	}
 
-	// Translate absolute links as relative to this mountpoint.
-	// Don't use path.Abs since we don't want to have platform-specific behavior.
-	if strings.HasPrefix(target, "/") {
-		target = filepath.Join(fs.config.Mountpoint, target)
-	}
-
-	logEntry.Result("%s", target)
-	return target, logEntry.Status(status)
+	return target, toFuseStatusLog(err, logEntry)
 }
 
 func readLink(client DeviceClient, path string) (string, error) {
@@ -393,7 +356,7 @@ func readLink(client DeviceClient, path string) (string, error) {
 	if result == ReadlinkInvalidArgument {
 		return "", ErrNotALink
 	} else if result == ReadlinkPermissionDenied {
-		return "", os.ErrPermission
+		return "", ErrNoPermission
 	}
 
 	return result, nil
@@ -406,8 +369,7 @@ func (fs *AdbFileSystem) Access(name string, mode uint32, context *fuse.Context)
 	defer logEntry.SuppressFinishOperation()
 
 	if mode&fuse.W_OK == fuse.W_OK {
-		logEntry.Result("writes not supported")
-		return logEntry.Status(fuse.EACCES)
+		return toFuseStatusLog(ErrNotPermitted, logEntry)
 	}
 
 	device := fs.getQuickUseClient()
@@ -416,18 +378,18 @@ func (fs *AdbFileSystem) Access(name string, mode uint32, context *fuse.Context)
 	// Access is required to resolve symlinks.
 	name, _, err := readLinkRecursively(device, name, logEntry)
 	if err != nil {
-		return toFuseStatus(err, logEntry)
+		return toFuseStatusLog(err, logEntry)
 	}
 
 	logEntry.Result("target %s exists, read/execute access permitted", name)
-	return logEntry.Status(fuse.OK)
+	return toFuseStatusLog(OK, logEntry)
 }
 
 func (fs *AdbFileSystem) Create(name string, rawFlags uint32, perms uint32, context *fuse.Context) (nodefs.File, fuse.Status) {
 	name = fs.convertClientPathToDevicePath(name)
 	logEntry := StartOperation("Create", name)
 	defer logEntry.FinishOperation()
-	return nil, logEntry.Status(fuse.ENOSYS)
+	return nil, toFuseStatusLog(syscall.ENOSYS, logEntry)
 }
 
 func (fs *AdbFileSystem) Open(name string, flags uint32, context *fuse.Context) (nodefs.File, fuse.Status) {
@@ -437,8 +399,10 @@ func (fs *AdbFileSystem) Open(name string, flags uint32, context *fuse.Context) 
 	defer logEntry.FinishOperation()
 
 	file, err := fs.createFile(name, FileOpenFlags(flags), logEntry)
-	logEntry.Result("%s", file)
-	return file, toFuseStatus(err, logEntry)
+	if err == nil {
+		logEntry.Result("%s", file)
+	}
+	return file, toFuseStatusLog(err, logEntry)
 }
 
 func (fs *AdbFileSystem) createFile(name string, flags FileOpenFlags, logEntry *LogEntry) (nodefs.File, error) {
@@ -464,26 +428,22 @@ func (fs *AdbFileSystem) Mkdir(name string, perms uint32, context *fuse.Context)
 	device := fs.getQuickUseClient()
 	defer fs.recycleQuickUseClient(device)
 
-	err, status := mkdir(device, name)
-	if err != nil {
-		logEntry.Error(err)
-	}
-
-	return logEntry.Status(status)
+	err := mkdir(device, name)
+	return toFuseStatusLog(err, logEntry)
 }
 
-func mkdir(client DeviceClient, path string) (error, fuse.Status) {
+func mkdir(client DeviceClient, path string) error {
 	result, err := client.RunCommand("mkdir", path)
 	if err != nil {
-		return err, fuse.EIO
+		return err
 	}
 
 	if result != "" {
-		result = strings.TrimSuffix(result, "\r\n")
-		return errors.New(result), fuse.EACCES
+		// TODO Be smarter about this.
+		return ErrNoPermission
 	}
 
-	return nil, fuse.OK
+	return nil
 }
 
 func (fs *AdbFileSystem) Rename(oldName, newName string, context *fuse.Context) fuse.Status {
@@ -496,26 +456,22 @@ func (fs *AdbFileSystem) Rename(oldName, newName string, context *fuse.Context) 
 	device := fs.getQuickUseClient()
 	defer fs.recycleQuickUseClient(device)
 
-	err, status := rename(device, oldName, newName)
-	if err != nil {
-		logEntry.Error(err)
-	}
-
-	return logEntry.Status(status)
+	err := rename(device, oldName, newName)
+	return toFuseStatusLog(err, logEntry)
 }
 
-func rename(client DeviceClient, oldName, newName string) (error, fuse.Status) {
+func rename(client DeviceClient, oldName, newName string) error {
 	result, err := client.RunCommand("mv", oldName, newName)
 	if err != nil {
-		return err, fuse.EIO
+		return err
 	}
 
 	if result != "" {
-		result = strings.TrimSuffix(result, "\r\n")
-		return errors.New(result), fuse.EACCES
+		// TODO Be smarter about this.
+		return ErrNoPermission
 	}
 
-	return nil, fuse.OK
+	return nil
 }
 
 func (fs *AdbFileSystem) Rmdir(name string, context *fuse.Context) fuse.Status {
@@ -527,26 +483,22 @@ func (fs *AdbFileSystem) Rmdir(name string, context *fuse.Context) fuse.Status {
 	device := fs.getQuickUseClient()
 	defer fs.recycleQuickUseClient(device)
 
-	err, status := rmdir(device, name)
-	if err != nil {
-		logEntry.Error(err)
-	}
-
-	return logEntry.Status(status)
+	err := rmdir(device, name)
+	return toFuseStatusLog(err, logEntry)
 }
 
-func rmdir(client DeviceClient, name string) (error, fuse.Status) {
+func rmdir(client DeviceClient, name string) error {
 	result, err := client.RunCommand("rmdir", name)
 	if err != nil {
-		return err, fuse.EIO
+		return err
 	}
 
 	if result != "" {
-		result = strings.TrimSuffix(result, "\r\n")
-		return errors.New(result), fuse.EINVAL
+		// TODO Be smarter about this.
+		return syscall.EINVAL
 	}
 
-	return nil, fuse.OK
+	return nil
 }
 
 func (fs *AdbFileSystem) Unlink(name string, context *fuse.Context) fuse.Status {
@@ -558,68 +510,64 @@ func (fs *AdbFileSystem) Unlink(name string, context *fuse.Context) fuse.Status 
 	device := fs.getQuickUseClient()
 	defer fs.recycleQuickUseClient(device)
 
-	err, status := unlink(device, name)
-	if err != nil {
-		logEntry.Error(err)
-	}
-
-	return logEntry.Status(status)
+	err := unlink(device, name)
+	return toFuseStatusLog(err, logEntry)
 }
 
-func unlink(client DeviceClient, name string) (error, fuse.Status) {
+func unlink(client DeviceClient, name string) error {
 	result, err := client.RunCommand("rm", name)
 	if err != nil {
-		return err, fuse.EIO
+		return err
 	}
 
 	if result != "" {
-		result = strings.TrimSuffix(result, "\r\n")
-		return errors.New(result), fuse.EACCES
+		// TODO Be smarter about this error.
+		return ErrNoPermission
 	}
 
-	return nil, fuse.OK
+	return nil
 }
 
 func (fs *AdbFileSystem) Chmod(name string, mode uint32, context *fuse.Context) (code fuse.Status) {
 	name = fs.convertClientPathToDevicePath(name)
 	logEntry := StartOperation("Chmod", formatArgsListForLog(name, os.FileMode(mode)))
 	defer logEntry.FinishOperation()
-	return logEntry.Status(fuse.ENOSYS)
+	return toFuseStatusLog(syscall.ENOSYS, logEntry)
 }
 
 func (fs *AdbFileSystem) Chown(name string, uid uint32, gid uint32, context *fuse.Context) (code fuse.Status) {
 	name = fs.convertClientPathToDevicePath(name)
 	logEntry := StartOperation("Chown", fmt.Sprintf("%s uid=%d, gid=%d", name, uid, gid))
 	defer logEntry.FinishOperation()
-	return logEntry.Status(fuse.ENOSYS)
+	return toFuseStatusLog(syscall.ENOSYS, logEntry)
 }
 
 func (fs *AdbFileSystem) GetXAttr(name string, attribute string, context *fuse.Context) (data []byte, code fuse.Status) {
 	name = fs.convertClientPathToDevicePath(name)
 	logEntry := StartOperation("GetXAttr", formatArgsListForLog(name, attribute))
 	defer logEntry.FinishOperation()
-	return nil, logEntry.Status(fuse.ENOSYS)
+	return nil, toFuseStatusLog(syscall.ENOSYS, logEntry)
 }
 
 func (fs *AdbFileSystem) ListXAttr(name string, context *fuse.Context) (attributes []string, code fuse.Status) {
 	name = fs.convertClientPathToDevicePath(name)
 	logEntry := StartOperation("ListXAttr", formatArgsListForLog(name))
 	defer logEntry.FinishOperation()
-	return nil, logEntry.Status(fuse.ENOSYS)
+	return nil, toFuseStatusLog(syscall.ENOSYS, logEntry)
 }
 
 func (fs *AdbFileSystem) RemoveXAttr(name string, attr string, context *fuse.Context) fuse.Status {
 	name = fs.convertClientPathToDevicePath(name)
 	logEntry := StartOperation("RemoveXAttr", formatArgsListForLog(name, attr))
 	defer logEntry.FinishOperation()
-	return logEntry.Status(fuse.ENOSYS)
+	return toFuseStatusLog(syscall.ENOSYS, logEntry)
 }
 
 func (fs *AdbFileSystem) SetXAttr(name string, attr string, data []byte, flags int, context *fuse.Context) fuse.Status {
 	name = fs.convertClientPathToDevicePath(name)
 	logEntry := StartOperation("SetXAttr", formatArgsListForLog(name, attr, data, flags))
 	defer logEntry.FinishOperation()
-	return logEntry.Status(fuse.ENOSYS)
+	return toFuseStatusLog(syscall.ENOSYS, logEntry)
 }
 
 func (fs *AdbFileSystem) Link(oldName string, newName string, context *fuse.Context) fuse.Status {
@@ -627,7 +575,7 @@ func (fs *AdbFileSystem) Link(oldName string, newName string, context *fuse.Cont
 	newName = fs.convertClientPathToDevicePath(newName)
 	logEntry := StartOperation("Link", formatArgsListForLog(oldName, newName))
 	defer logEntry.FinishOperation()
-	return logEntry.Status(fuse.ENOSYS)
+	return toFuseStatusLog(syscall.ENOSYS, logEntry)
 }
 
 func (fs *AdbFileSystem) Symlink(oldName string, newName string, context *fuse.Context) fuse.Status {
@@ -635,28 +583,28 @@ func (fs *AdbFileSystem) Symlink(oldName string, newName string, context *fuse.C
 	newName = fs.convertClientPathToDevicePath(newName)
 	logEntry := StartOperation("Symlink", formatArgsListForLog(oldName, newName))
 	defer logEntry.FinishOperation()
-	return logEntry.Status(fuse.ENOSYS)
+	return toFuseStatusLog(syscall.ENOSYS, logEntry)
 }
 
 func (fs *AdbFileSystem) Mknod(name string, mode uint32, dev uint32, context *fuse.Context) fuse.Status {
 	name = fs.convertClientPathToDevicePath(name)
 	logEntry := StartOperation("Mknod", formatArgsListForLog(name, mode, dev))
 	defer logEntry.FinishOperation()
-	return logEntry.Status(fuse.ENOSYS)
+	return toFuseStatusLog(syscall.ENOSYS, logEntry)
 }
 
 func (fs *AdbFileSystem) Truncate(name string, size uint64, context *fuse.Context) (code fuse.Status) {
 	name = fs.convertClientPathToDevicePath(name)
 	logEntry := StartOperation("Truncate", formatArgsListForLog(name, size))
 	defer logEntry.FinishOperation()
-	return logEntry.Status(fuse.ENOSYS)
+	return toFuseStatusLog(syscall.ENOSYS, logEntry)
 }
 
 func (fs *AdbFileSystem) Utimens(name string, Atime *time.Time, Mtime *time.Time, context *fuse.Context) (code fuse.Status) {
 	name = fs.convertClientPathToDevicePath(name)
 	logEntry := StartOperation("Utimens", formatArgsListForLog(name, Atime, Mtime))
 	defer logEntry.FinishOperation()
-	return logEntry.Status(fuse.ENOSYS)
+	return toFuseStatusLog(syscall.ENOSYS, logEntry)
 }
 
 func (fs *AdbFileSystem) OnMount(nodeFs *pathfs.PathNodeFs) {

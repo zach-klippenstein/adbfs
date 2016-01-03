@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"os"
 	"time"
+	"syscall"
 
 	"github.com/Sirupsen/logrus"
-	"github.com/hanwen/go-fuse/fuse"
 	"github.com/zach-klippenstein/adbfs/internal/cli"
 	"github.com/zach-klippenstein/goadb/util"
 	"golang.org/x/net/trace"
@@ -99,11 +99,15 @@ func (r *LogEntry) Result(msg string, args ...interface{}) {
 }
 
 // Status records the fuse.Status result of an operation.
-func (r *LogEntry) Status(status fuse.Status) fuse.Status {
+func (r *LogEntry) Status(status syscall.Errno) syscall.Errno {
 	if r.status != "" {
 		panic(fmt.Sprintf("status already set to '%s', can't set to '%s'", r.status, status))
 	}
-	r.status = status.String()
+	if status == OK {
+		r.status = "OK"
+	} else {
+		r.status = status.Error()
+	}
 	return status
 }
 
