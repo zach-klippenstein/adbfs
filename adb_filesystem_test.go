@@ -257,7 +257,7 @@ func TestReadLink_PermissionDenied(t *testing.T) {
 	assert.NoError(t, err)
 
 	_, status := fs.Readlink("version_link.txt", newContext())
-	assert.Equal(t, fuse.EPERM, status)
+	assert.Equal(t, fuse.EACCES, status)
 }
 
 func TestMkdir_Success(t *testing.T) {
