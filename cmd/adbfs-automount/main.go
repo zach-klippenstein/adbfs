@@ -25,6 +25,12 @@ func init() {
 }
 
 func main() {
+	exitCode := mainWithExitCode()
+	os.Exit(exitCode)
+}
+
+// Allows us to avoid calling os.Exit so we can run deferred functions as normal.
+func mainWithExitCode() int {
 	cli.Initialize(appName, &config.BaseConfig)
 	eventLog := cli.NewEventLog(appName, "")
 	defer eventLog.Finish()
@@ -39,14 +45,24 @@ func main() {
 	signal.Notify(signals, os.Kill, os.Interrupt)
 
 	processes := cli.NewProcessTracker()
-	defer processes.Shutdown()
+	defer func() {
+		eventLog.Infof("shutting down all mount processes…")
+		processes.Shutdown()
+		eventLog.Infof("all processes shutdown.")
+	}()
 
 	cli.Log.Info("automounter ready.")
 	defer cli.Log.Info("exiting.")
 
 	for {
 		select {
-		case event := <-deviceWatcher.C():
+		case event, ok := <-deviceWatcher.C():
+			if !ok {
+				// DeviceWatcher gave up.
+				eventLog.Errorf("device watcher quit unexpectedly: %s", deviceWatcher.Err())
+				return 1
+			}
+
 			if event.CameOnline() {
 				eventLog.Debugf("device connected: %s", event.Serial)
 				processes.Go(event.Serial, mountDevice)
@@ -58,10 +74,7 @@ func main() {
 		case signal := <-signals:
 			eventLog.Debugf("got signal %v", signal)
 			if signal == os.Kill || signal == os.Interrupt {
-				eventLog.Infof("shutting down all mount processes…")
-				processes.Shutdown()
-				eventLog.Infof("all processes shutdown.")
-				return
+				return 0
 			}
 		}
 	}
