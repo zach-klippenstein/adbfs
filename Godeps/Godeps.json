@@ -35,7 +35,7 @@
 		},
 		{
 			"ImportPath": "github.com/zach-klippenstein/goadb",
-			"Rev": "aea57fe58fcf1ccd040aeeca72babc658247d630"
+			"Rev": "ee01d1202e970bbbf4a16f2551c1bb2b28062ea0"
 		},
 		{
 			"ImportPath": "golang.org/x/net/context",
@@ -48,6 +48,10 @@
 		{
 			"ImportPath": "golang.org/x/net/trace",
 			"Rev": "db8e4de5b2d6653f66aea53094624468caad15d2"
+		},
+		{
+			"ImportPath": "golang.org/x/sys/unix",
+			"Rev": "16e60ce6821cc44d9dc924a9f4866ad6ca076ebf"
 		},
 		{
 			"ImportPath": "gopkg.in/alecthomas/kingpin.v2",

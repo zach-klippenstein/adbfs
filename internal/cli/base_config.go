@@ -26,6 +26,7 @@ type BaseConfig struct {
 	ServeDebug         bool
 	DeviceRoot         string
 	ReadOnly           bool
+	PathToAdb          string
 }
 
 const (
@@ -37,6 +38,7 @@ const (
 	ServeDebugFlag         = "debug"
 	DeviceRootFlag         = "device-root"
 	ReadOnlyFlag           = "readonly"
+	PathToAdb              = "adb"
 )
 
 func registerBaseFlags(config *BaseConfig) {
@@ -46,6 +48,7 @@ func registerBaseFlags(config *BaseConfig) {
 	kingpin.Flag(ServeDebugFlag, "If set, will start an HTTP server to expose profiling and trace logs. Off by default.").BoolVar(&config.ServeDebug)
 	kingpin.Flag(DeviceRootFlag, "The device directory to mount.").Default("/sdcard").StringVar(&config.DeviceRoot)
 	kingpin.Flag(ReadOnlyFlag, "Mount as a readonly filesystem. True by default, since write support is still experimental. Use --no-readonly to enable writes.").Short('r').Default("true").BoolVar(&config.ReadOnly)
+	kingpin.Flag(PathToAdb, "Path to the adb executable. If unspecified, the PATH environment variable will be searched.").StringVar(&config.PathToAdb)
 
 	logLevels := []string{
 		logrus.PanicLevel.String(),
@@ -71,13 +74,14 @@ func (c *BaseConfig) AsArgs() []string {
 		formatFlag(VerboseFlag, c.Verbose),
 		formatFlag(DeviceRootFlag, c.DeviceRoot),
 		formatFlag(ReadOnlyFlag, c.ReadOnly),
+		formatFlag(PathToAdb, c.PathToAdb),
 	}
 }
 
-// ClientConfig returns a goadb.ClientConfig from CLI arguments.
-func (c *BaseConfig) ClientConfig() goadb.ClientConfig {
-	return goadb.ClientConfig{
-		Dialer: goadb.NewDialer("", c.AdbPort),
+// ServerConfig returns a goadb.ServerConfig from CLI arguments.
+func (c *BaseConfig) ServerConfig() goadb.ServerConfig {
+	return goadb.ServerConfig{
+		Port: c.AdbPort,
 	}
 }
 
