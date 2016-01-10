@@ -33,6 +33,11 @@ func (f FileOpenFlags) CanRead() bool {
 	return !f.Contains(O_WRONLY)
 }
 
+func (f FileOpenFlags) CanWrite() bool {
+	return f.Contains(O_WRONLY | O_RDWR)
+}
+
+// Contains returns true if the current flags contain any of the bits in bits.
 func (f FileOpenFlags) Contains(bits FileOpenFlags) bool {
-	return (f & bits) == bits
+	return (f & bits) != 0
 }

@@ -2,6 +2,8 @@ package adbfs
 
 import (
 	"io"
+	"os"
+	"time"
 
 	"github.com/zach-klippenstein/goadb"
 	"github.com/zach-klippenstein/goadb/util"
@@ -10,6 +12,7 @@ import (
 // DeviceClient wraps goadb.DeviceClient for testing.
 type DeviceClient interface {
 	OpenRead(path string, log *LogEntry) (io.ReadCloser, error)
+	OpenWrite(path string, perms os.FileMode, mtime time.Time, log *LogEntry) (io.WriteCloser, error)
 	Stat(path string, log *LogEntry) (*goadb.DirEntry, error)
 	ListDirEntries(path string, log *LogEntry) ([]*goadb.DirEntry, error)
 
@@ -49,6 +52,10 @@ func (c goadbDeviceClient) OpenRead(path string, _ *LogEntry) (io.ReadCloser, er
 		return nil, c.handleDeviceNotFound(err)
 	}
 	return r, err
+}
+
+func (c goadbDeviceClient) OpenWrite(path string, mode os.FileMode, mtime time.Time, _ *LogEntry) (io.WriteCloser, error) {
+	return c.DeviceClient.OpenWrite(path, mode, mtime)
 }
 
 func (c goadbDeviceClient) Stat(path string, _ *LogEntry) (*goadb.DirEntry, error) {

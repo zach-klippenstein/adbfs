@@ -16,6 +16,8 @@ type DirEntryLoader func(path string) (*CachedDirEntries, error)
 type DirEntryCache interface {
 	GetOrLoad(path string, loader DirEntryLoader) (entries *CachedDirEntries, err error, hit bool)
 	Get(path string) (entries *CachedDirEntries, found bool)
+	// Removes the entry for path from the cache without blocking on other cache operations.
+	RemoveEventually(path string)
 }
 
 type realDirEntryCache struct {
@@ -51,4 +53,8 @@ func (c *realDirEntryCache) Get(path string) (*CachedDirEntries, bool) {
 	}
 	c.eventLog.Errorf("Get(%s) = miss", path)
 	return nil, false
+}
+
+func (c *realDirEntryCache) RemoveEventually(path string) {
+	go c.cache.Delete(path)
 }

@@ -10,8 +10,9 @@ import (
 )
 
 type delegateDirEntryCache struct {
-	DoGetOrLoad func(path string, loader DirEntryLoader) (entries *CachedDirEntries, err error, hit bool)
-	DoGet       func(path string) (entries *CachedDirEntries, found bool)
+	DoGetOrLoad        func(path string, loader DirEntryLoader) (entries *CachedDirEntries, err error, hit bool)
+	DoGet              func(path string) (entries *CachedDirEntries, found bool)
+	DoRemoveEventually func(path string)
 }
 
 func (c *delegateDirEntryCache) GetOrLoad(path string, loader DirEntryLoader) (entries *CachedDirEntries, err error, hit bool) {
@@ -20,6 +21,10 @@ func (c *delegateDirEntryCache) GetOrLoad(path string, loader DirEntryLoader) (e
 
 func (c *delegateDirEntryCache) Get(path string) (entries *CachedDirEntries, found bool) {
 	return c.DoGet(path)
+}
+
+func (c *delegateDirEntryCache) RemoveEventually(path string) {
+	c.DoRemoveEventually(path)
 }
 
 func TestDirEntryCacheLoadSuccess(t *testing.T) {

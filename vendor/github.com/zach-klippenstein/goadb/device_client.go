@@ -3,11 +3,17 @@ package goadb
 import (
 	"fmt"
 	"io"
+	"os"
 	"strings"
+	"time"
 
 	"github.com/zach-klippenstein/goadb/util"
 	"github.com/zach-klippenstein/goadb/wire"
 )
+
+// MtimeOfClose should be passed to OpenWrite to set the file modification time to the time the Close
+// method is called.
+var MtimeOfClose = time.Time{}
 
 // DeviceClient communicates with a specific Android device.
 type DeviceClient struct {
@@ -112,7 +118,7 @@ func (c *DeviceClient) RunCommand(cmd string, args ...string) (string, error) {
 	if err = conn.SendMessage([]byte(req)); err != nil {
 		return "", wrapClientError(err, c, "RunCommand")
 	}
-	if err = wire.ReadStatusFailureAsError(conn, req); err != nil {
+	if _, err = conn.ReadStatus(req); err != nil {
 		return "", wrapClientError(err, c, "RunCommand")
 	}
 
@@ -171,6 +177,20 @@ func (c *DeviceClient) OpenRead(path string) (io.ReadCloser, error) {
 	return reader, wrapClientError(err, c, "OpenRead(%s)", path)
 }
 
+// OpenWrite opens the file at path on the device, creating it with the permissions specified
+// by perms if necessary, and returns a writer that writes to the file.
+// The files modification time will be set to mtime when the WriterCloser is closed. The zero value
+// is TimeOfClose, which will use the time the Close method is called as the modification time.
+func (c *DeviceClient) OpenWrite(path string, perms os.FileMode, mtime time.Time) (io.WriteCloser, error) {
+	conn, err := c.getSyncConn()
+	if err != nil {
+		return nil, wrapClientError(err, c, "OpenWrite(%s)", path)
+	}
+
+	writer, err := sendFile(conn, path, perms, mtime)
+	return writer, wrapClientError(err, c, "OpenWrite(%s)", path)
+}
+
 // getAttribute returns the first message returned by the server by running
 // <host-prefix>:<attr>, where host-prefix is determined from the DeviceDescriptor.
 func (c *DeviceClient) getAttribute(attr string) (string, error) {
@@ -192,7 +212,7 @@ func (c *DeviceClient) getSyncConn() (*wire.SyncConn, error) {
 	if err := wire.SendMessageString(conn, "sync:"); err != nil {
 		return nil, err
 	}
-	if err := wire.ReadStatusFailureAsError(conn, "sync"); err != nil {
+	if _, err := conn.ReadStatus("sync"); err != nil {
 		return nil, err
 	}
 
@@ -213,7 +233,7 @@ func (c *DeviceClient) dialDevice() (*wire.Conn, error) {
 		return nil, util.WrapErrf(err, "error connecting to device '%s'", c.descriptor)
 	}
 
-	if err = wire.ReadStatusFailureAsError(conn, req); err != nil {
+	if _, err = conn.ReadStatus(req); err != nil {
 		conn.Close()
 		return nil, err
 	}

@@ -3,12 +3,28 @@ package adbfs
 import (
 	"fmt"
 	"io"
+	"os"
+	"time"
 
 	"github.com/hanwen/go-fuse/fuse"
 	"github.com/hanwen/go-fuse/fuse/nodefs"
+	"github.com/zach-klippenstein/goadb/util"
+)
+
+const (
+	// See AdbFileOpenOptions.Perms.
+	DontSetPerms = os.FileMode(0)
+
+	// This seems pretty long, but every write that occurs after this period will
+	// flush the entire buffer to the device – this could take a while, and if we do it
+	// to often we're effectively thrashing. If a file has been written to continuously for
+	// this time, it's guaranteed to take at least as long, probably a lot longer, to flush
+	// to the device (process->kernel->fuse has lower latency than process->adb->device).
+	DefaultDirtyTimeout = 5 * time.Minute
 )
 
 type AdbFileOpenOptions struct {
+	// If the create flag is set, the file will immediately be created if it does not exist.
 	Flags      FileOpenFlags
 	FileBuffer *FileBuffer
 }
@@ -39,7 +55,7 @@ func NewAdbFile(opts AdbFileOpenOptions) nodefs.File {
 		AdbFileOpenOptions: opts,
 	}
 
-	return nodefs.NewReadOnlyFile(adbFile)
+	return adbFile
 }
 
 func (f *AdbFile) startFileOperation(name string, args string) *LogEntry {
@@ -79,7 +95,8 @@ func (f *AdbFile) Read(buf []byte, off int64) (fuse.ReadResult, fuse.Status) {
 	return fuse.ReadResultData(buf[:n]), toFuseStatusLog(OK, logEntry)
 }
 
-// Fsync re-reads the file from the device into memory.
+// Fsync flushes the file to device if the dirty flag is set, else re-reads the file from the device
+// into memory.
 func (f *AdbFile) Fsync(flags int) fuse.Status {
 	logEntry := f.startFileOperation("Fsync", formatArgsListForLog(flags))
 	defer logEntry.FinishOperation()
@@ -95,5 +112,54 @@ func (f *AdbFile) GetAttr(out *fuse.Attr) fuse.Status {
 	// This operation doesn't require a read flag.
 
 	err := getAttr(f.FileBuffer.Path, f.FileBuffer.Client, logEntry, out)
+	return toFuseStatusLog(err, logEntry)
+}
+
+func (f *AdbFile) Write(data []byte, off int64) (uint32, fuse.Status) {
+	logEntry := f.startFileOperation("Write", formatArgsListForLog(data, off))
+	defer logEntry.FinishOperation()
+
+	if !f.Flags.CanWrite() {
+		return 0, toFuseStatusLog(ErrNotPermitted, logEntry)
+	}
+
+	n, err := f.FileBuffer.WriteAt(data, off)
+	logEntry.Result("wrote %d bytes", n)
+
+	if err == nil {
+		err = f.FileBuffer.SyncIfTooDirty(logEntry)
+		if err != nil {
+			err = util.WrapErrf(err, "write successful, but error syncing after write")
+		}
+	}
+
+	return uint32(n), toFuseStatusLog(err, logEntry)
+}
+
+func (f *AdbFile) Flush() fuse.Status {
+	logEntry := f.startFileOperation("Flush", "")
+	defer logEntry.FinishOperation()
+
+	if !f.Flags.CanWrite() {
+		// Flush is *always* called when the fd is closed, so it doesn't make sense
+		// to return a permission error here. Instead, it's just a no-op.
+		// This is also what the implementation of nodefs.NewDefaultFile does.
+		return toFuseStatusLog(OK, logEntry)
+	}
+
+	err := f.FileBuffer.Flush(logEntry)
+	return toFuseStatusLog(err, logEntry)
+}
+
+func (f *AdbFile) Truncate(size uint64) fuse.Status {
+	logEntry := f.startFileOperation("Truncate", formatArgsListForLog(size, 10))
+	defer logEntry.FinishOperation()
+
+	if !f.Flags.CanWrite() {
+		return toFuseStatusLog(ErrNotPermitted, logEntry)
+	}
+
+	f.FileBuffer.SetSize(int64(size))
+	err := f.FileBuffer.Sync(logEntry)
 	return toFuseStatusLog(err, logEntry)
 }
