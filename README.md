@@ -5,7 +5,7 @@ A FUSE filesystem that uses [goadb](https://github.com/zach-klippenstein/goadb) 
 ## Features
 
 * Read access to Android device filesystems through adb, *without root*. Of course, this is limited to files that are accessible to whatever user `adb shell` runs the shell as on the device.
-* Experimental write support (run with `--no-readonly`).
+* Experimental write support (run with `--no-readonly`). Notably, on OSX, Finder can't copy files into mounted directories ([issue #34](https://github.com/zach-klippenstein/adbfs/issues/34)).
 * Automounter daemon that detects when devices are connected and mounts them under a configurable directory.
 * Communicates directly with adb server using goadb instead of delegating to the adb client command like most adb-based filesystems.
 
