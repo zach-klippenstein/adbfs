@@ -45,6 +45,7 @@ For example, on OSX, paste this into `~/Library/LaunchAgents/com.adbfs-automount
   <key>ProgramArguments</key>
   <array>
     <string>/Users/zach/go/bin/adbfs-automount</string>
+    <string>--adb=/Users/zach/android-sdk/platform-tools/adb</string>
     <string>--adbfs=/Users/zach/go/bin/adbfs</string>
   </array>
   <key>RunAtLoad</key>

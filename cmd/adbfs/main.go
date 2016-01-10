@@ -61,10 +61,13 @@ func main() {
 	}
 
 	cache := initializeCache(config.CacheTtl)
-	clientConfig := config.ClientConfig()
+	adbServer, err := goadb.NewServer(config.ServerConfig())
+	if err != nil {
+		cli.Log.Fatal(err)
+	}
 
-	fs := initializeFileSystem(clientConfig, absoluteMountpoint, cache)
-	go watchForDeviceDisconnected(clientConfig, config.DeviceSerial)
+	fs := initializeFileSystem(adbServer, absoluteMountpoint, cache)
+	go watchForDeviceDisconnected(adbServer, config.DeviceSerial)
 
 	server, _, err = nodefs.MountRoot(absoluteMountpoint, fs.Root(), nil)
 	if err != nil {
@@ -104,9 +107,9 @@ func initializeCache(ttl time.Duration) fs.DirEntryCache {
 	return fs.NewDirEntryCache(ttl)
 }
 
-func initializeFileSystem(clientConfig goadb.ClientConfig, mountpoint string, cache fs.DirEntryCache) *pathfs.PathNodeFs {
+func initializeFileSystem(server goadb.Server, mountpoint string, cache fs.DirEntryCache) *pathfs.PathNodeFs {
 	clientFactory := fs.NewCachingDeviceClientFactory(cache,
-		fs.NewGoadbDeviceClientFactory(clientConfig, config.DeviceSerial, handleDeviceDisconnected))
+		fs.NewGoadbDeviceClientFactory(server, config.DeviceSerial, handleDeviceDisconnected))
 
 	var fsImpl pathfs.FileSystem
 	fsImpl, err := fs.NewAdbFileSystem(fs.Config{
@@ -124,8 +127,8 @@ func initializeFileSystem(clientConfig goadb.ClientConfig, mountpoint string, ca
 	return pathfs.NewPathNodeFs(fsImpl, nil)
 }
 
-func watchForDeviceDisconnected(clientConfig goadb.ClientConfig, serial string) {
-	watcher := goadb.NewDeviceWatcher(clientConfig)
+func watchForDeviceDisconnected(server goadb.Server, serial string) {
+	watcher := goadb.NewDeviceWatcher(server)
 	defer watcher.Shutdown()
 
 	for {

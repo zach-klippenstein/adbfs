@@ -27,6 +27,7 @@ func TestAdbfsConfigAsArgs(t *testing.T) {
 		"--no-verbose",
 		"--device-root=/abc",
 		"--readonly",
+		"--adb=",
 	}
 
 	assert.Equal(t, expectedArgs, config.AsArgs())

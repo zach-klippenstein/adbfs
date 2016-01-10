@@ -18,7 +18,10 @@ import (
 
 const appName = "adbfs-automount"
 
-var config cli.AutomountConfig
+var (
+	config cli.AutomountConfig
+	server goadb.Server
+)
 
 func init() {
 	cli.RegisterAutomountFlags(&config)
@@ -44,7 +47,14 @@ func mainWithExitCode() int {
 		eventLog.Infof("mounting as writable filesystem")
 	}
 
-	deviceWatcher := goadb.NewDeviceWatcher(config.ClientConfig())
+	var err error
+	server, err = goadb.NewServer(config.ServerConfig())
+	if err != nil {
+		eventLog.Errorf("error initializing adb server: %s", err)
+		return 1
+	}
+
+	deviceWatcher := goadb.NewDeviceWatcher(server)
 	defer deviceWatcher.Shutdown()
 
 	signals := make(chan os.Signal)
@@ -94,7 +104,7 @@ func mountDevice(serial string, context context.Context) {
 		eventLog.Finish()
 	}()
 
-	adbClient := goadb.NewDeviceClient(config.ClientConfig(), goadb.DeviceWithSerial(serial))
+	adbClient := goadb.NewDeviceClient(server, goadb.DeviceWithSerial(serial))
 	deviceInfo, err := adbClient.GetDeviceInfo()
 	if err != nil {
 		eventLog.Errorf("error getting device info for %s: %s", serial, err)

@@ -35,12 +35,12 @@ const (
 	ReadlinkPermissionDenied = "readlink: Permission denied"
 )
 
-func NewGoadbDeviceClientFactory(clientConfig goadb.ClientConfig, deviceSerial string, deviceDisconnectedHandler func()) DeviceClientFactory {
+func NewGoadbDeviceClientFactory(server goadb.Server, deviceSerial string, deviceDisconnectedHandler func()) DeviceClientFactory {
 	deviceDescriptor := goadb.DeviceWithSerial(deviceSerial)
 
 	return func() DeviceClient {
 		return goadbDeviceClient{
-			DeviceClient:              goadb.NewDeviceClient(clientConfig, deviceDescriptor),
+			DeviceClient:              goadb.NewDeviceClient(server, deviceDescriptor),
 			deviceDisconnectedHandler: deviceDisconnectedHandler,
 		}
 	}

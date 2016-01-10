@@ -99,6 +99,10 @@ func formatFlag(name string, value interface{}) string {
 		}
 		return "--no-" + name
 	default:
+		//		if !reflect.ValueOf(value).IsValid() {
+		// Default/zero value.
 		return fmt.Sprintf("--%s=%v", name, value)
+		//		}
+		//		return ""
 	}
 }
