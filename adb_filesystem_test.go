@@ -12,7 +12,7 @@ import (
 
 func TestGetAttr_Root(t *testing.T) {
 	dev := &delegateDeviceClient{
-		stat: statFiles(&goadb.DirEntry{
+		stat: statFiles(&adb.DirEntry{
 			Name: "/",
 			Mode: os.ModeDir | 0755,
 		}),
@@ -52,7 +52,7 @@ func TestGetAttr_CustomDeviceRoot(t *testing.T) {
 		{"/sdcard/", "/sdcard", "/"},
 	} {
 		dev := &delegateDeviceClient{
-			stat: statFiles(&goadb.DirEntry{
+			stat: statFiles(&adb.DirEntry{
 				Name: root.DevicePath,
 				Mode: os.ModeDir | 0755,
 			}),
@@ -71,10 +71,10 @@ func TestGetAttr_CustomDeviceRoot(t *testing.T) {
 
 func TestGetAttr_CustomDeviceRootSymlink(t *testing.T) {
 	dev := &delegateDeviceClient{
-		stat: statFiles(&goadb.DirEntry{
+		stat: statFiles(&adb.DirEntry{
 			Name: "/0",
 			Mode: os.ModeSymlink,
-		}, &goadb.DirEntry{
+		}, &adb.DirEntry{
 			Name: "/1",
 			Mode: os.ModeDir,
 		}),
@@ -104,13 +104,13 @@ func TestGetAttr_CustomDeviceRootSymlink(t *testing.T) {
 
 func TestReadLinkRecursively_Success(t *testing.T) {
 	dev := &delegateDeviceClient{
-		stat: statFiles(&goadb.DirEntry{
+		stat: statFiles(&adb.DirEntry{
 			Name: "/0",
 			Mode: os.ModeSymlink,
-		}, &goadb.DirEntry{
+		}, &adb.DirEntry{
 			Name: "/1",
 			Mode: os.ModeSymlink,
-		}, &goadb.DirEntry{
+		}, &adb.DirEntry{
 			Name: "/2",
 			Mode: os.ModeDir,
 		}),
@@ -136,7 +136,7 @@ func TestReadLinkRecursively_Success(t *testing.T) {
 
 func TestReadLinkRecursively_MaxDepth(t *testing.T) {
 	dev := &delegateDeviceClient{
-		stat: statFiles(&goadb.DirEntry{
+		stat: statFiles(&adb.DirEntry{
 			Name: "/0",
 			Mode: os.ModeSymlink,
 		}),
@@ -154,7 +154,7 @@ func TestReadLinkRecursively_MaxDepth(t *testing.T) {
 
 func TestGetAttr_RegularFile(t *testing.T) {
 	dev := &delegateDeviceClient{
-		stat: statFiles(&goadb.DirEntry{
+		stat: statFiles(&adb.DirEntry{
 			Name: "/version.txt",
 			Size: 42,
 			Mode: 0444,
@@ -506,7 +506,7 @@ func TestUnlink_Error(t *testing.T) {
 
 func TestCreateFile_ExistSuccess(t *testing.T) {
 	dev := &delegateDeviceClient{
-		stat: statFiles(&goadb.DirEntry{
+		stat: statFiles(&adb.DirEntry{
 			Name: "/file",
 			Size: 512,
 			Mode: 0600,
@@ -584,7 +584,7 @@ func TestOpen(t *testing.T) {
 	// Open is just a thin wrapper around createFile, so this is just a smoke test.
 
 	dev := &delegateDeviceClient{
-		stat: statFiles(&goadb.DirEntry{
+		stat: statFiles(&adb.DirEntry{
 			Name: "/file",
 			Size: 512,
 			Mode: 0600,

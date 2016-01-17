@@ -42,7 +42,7 @@ const (
 )
 
 func registerBaseFlags(config *BaseConfig) {
-	kingpin.Flag(AdbPortFlag, "Port to connect to adb server on.").Default(strconv.Itoa(goadb.AdbPort)).IntVar(&config.AdbPort)
+	kingpin.Flag(AdbPortFlag, "Port to connect to adb server on.").Default(strconv.Itoa(adb.AdbPort)).IntVar(&config.AdbPort)
 	kingpin.Flag(ConnectionPoolSizeFlag, "Size of the connection pool. Not used for open files.").Default(strconv.Itoa(DefaultPoolSize)).IntVar(&config.ConnectionPoolSize)
 	kingpin.Flag(CacheTtlFlag, "Duration to keep cached file info.").Default(DefaultCacheTtl.String()).DurationVar(&config.CacheTtl)
 	kingpin.Flag(ServeDebugFlag, "If set, will start an HTTP server to expose profiling and trace logs. Off by default.").BoolVar(&config.ServeDebug)
@@ -78,9 +78,9 @@ func (c *BaseConfig) AsArgs() []string {
 	}
 }
 
-// ServerConfig returns a goadb.ServerConfig from CLI arguments.
-func (c *BaseConfig) ServerConfig() goadb.ServerConfig {
-	return goadb.ServerConfig{
+// ServerConfig returns a adb.ServerConfig from CLI arguments.
+func (c *BaseConfig) ServerConfig() adb.ServerConfig {
+	return adb.ServerConfig{
 		Port: c.AdbPort,
 	}
 }

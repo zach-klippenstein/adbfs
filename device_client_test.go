@@ -16,8 +16,8 @@ import (
 type delegateDeviceClient struct {
 	openRead       func(path string) (io.ReadCloser, error)
 	openWrite      func(path string, mode os.FileMode, mtime time.Time) (io.WriteCloser, error)
-	stat           func(path string) (*goadb.DirEntry, error)
-	listDirEntries func(path string) ([]*goadb.DirEntry, error)
+	stat           func(path string) (*adb.DirEntry, error)
+	listDirEntries func(path string) ([]*adb.DirEntry, error)
 	runCommand     func(cmd string, args []string) (string, error)
 }
 
@@ -29,11 +29,11 @@ func (c *delegateDeviceClient) OpenWrite(path string, mode os.FileMode, mtime ti
 	return c.openWrite(path, mode, mtime)
 }
 
-func (c *delegateDeviceClient) Stat(path string, _ *LogEntry) (*goadb.DirEntry, error) {
+func (c *delegateDeviceClient) Stat(path string, _ *LogEntry) (*adb.DirEntry, error) {
 	return c.stat(path)
 }
 
-func (c *delegateDeviceClient) ListDirEntries(path string, _ *LogEntry) ([]*goadb.DirEntry, error) {
+func (c *delegateDeviceClient) ListDirEntries(path string, _ *LogEntry) ([]*adb.DirEntry, error) {
 	return c.listDirEntries(path)
 }
 
@@ -41,8 +41,8 @@ func (c *delegateDeviceClient) RunCommand(cmd string, args ...string) (string, e
 	return c.runCommand(cmd, args)
 }
 
-func statFiles(entries ...*goadb.DirEntry) func(string) (*goadb.DirEntry, error) {
-	return func(path string) (*goadb.DirEntry, error) {
+func statFiles(entries ...*adb.DirEntry) func(string) (*adb.DirEntry, error) {
+	return func(path string) (*adb.DirEntry, error) {
 		for _, entry := range entries {
 			if entry.Name == path {
 				return entry, nil
@@ -70,7 +70,7 @@ func openWriteNoop() func(path string, mode os.FileMode, mtime time.Time) (io.Wr
 
 func openWriteTo(w *bytes.Buffer) func(path string, mode os.FileMode, mtime time.Time) (io.WriteCloser, error) {
 	return func(path string, mode os.FileMode, mtime time.Time) (io.WriteCloser, error) {
-		// Simulate how a goadb.OpenRead call works.
+		// Simulate how a adb.OpenRead call works.
 		if w != nil {
 			w.Reset()
 		}

@@ -12,7 +12,7 @@ import (
 
 // asFuseDirEntries reads directory entries from a goadb DirEntries and returns them as a
 // list of fuse DirEntry objects.
-func asFuseDirEntries(entries []*goadb.DirEntry) (result []fuse.DirEntry) {
+func asFuseDirEntries(entries []*adb.DirEntry) (result []fuse.DirEntry) {
 	result = make([]fuse.DirEntry, len(entries))
 
 	for i, entry := range entries {
@@ -26,7 +26,7 @@ func asFuseDirEntries(entries []*goadb.DirEntry) (result []fuse.DirEntry) {
 }
 
 // asFuseAttr creates a fuse Attr struct that contains the information from a goadb DirEntry.
-func asFuseAttr(entry *goadb.DirEntry, attr *fuse.Attr) {
+func asFuseAttr(entry *adb.DirEntry, attr *fuse.Attr) {
 	*attr = fuse.Attr{
 		Mode:  osFileModeToFuseFileMode(entry.Mode),
 		Size:  uint64(entry.Size),

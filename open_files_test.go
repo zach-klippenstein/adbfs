@@ -9,7 +9,7 @@ import (
 
 func TestOpenFiles_GetOrLoadSameFileSeparate(t *testing.T) {
 	dev := &delegateDeviceClient{
-		stat: statFiles(&goadb.DirEntry{
+		stat: statFiles(&adb.DirEntry{
 			Name: "/",
 		}),
 		openRead: openReadString("hello"),
@@ -34,7 +34,7 @@ func TestOpenFiles_GetOrLoadSameFileSeparate(t *testing.T) {
 
 func TestOpenFiles_GetOrLoadSameFileShared(t *testing.T) {
 	dev := &delegateDeviceClient{
-		stat: statFiles(&goadb.DirEntry{
+		stat: statFiles(&adb.DirEntry{
 			Name: "/",
 		}),
 		openRead: openReadString("hello"),

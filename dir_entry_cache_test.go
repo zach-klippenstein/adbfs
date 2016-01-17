@@ -31,7 +31,7 @@ func TestDirEntryCacheLoadSuccess(t *testing.T) {
 	cache := NewDirEntryCache(5 * time.Second)
 	loader := func(path string) (*CachedDirEntries, error) {
 		return &CachedDirEntries{
-			InOrder: []*goadb.DirEntry{&goadb.DirEntry{
+			InOrder: []*adb.DirEntry{&adb.DirEntry{
 				Name: path,
 			}}}, nil
 	}

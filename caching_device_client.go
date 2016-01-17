@@ -16,8 +16,8 @@ type CachingDeviceClient struct {
 }
 
 type CachedDirEntries struct {
-	InOrder []*goadb.DirEntry
-	ByName  map[string]*goadb.DirEntry
+	InOrder []*adb.DirEntry
+	ByName  map[string]*adb.DirEntry
 }
 
 func NewCachingDeviceClientFactory(cache DirEntryCache, factory DeviceClientFactory) DeviceClientFactory {
@@ -29,10 +29,10 @@ func NewCachingDeviceClientFactory(cache DirEntryCache, factory DeviceClientFact
 	}
 }
 
-func NewCachedDirEntries(entries []*goadb.DirEntry) *CachedDirEntries {
+func NewCachedDirEntries(entries []*adb.DirEntry) *CachedDirEntries {
 	result := &CachedDirEntries{
 		InOrder: entries,
-		ByName:  make(map[string]*goadb.DirEntry),
+		ByName:  make(map[string]*adb.DirEntry),
 	}
 
 	for _, entry := range result.InOrder {
@@ -42,7 +42,7 @@ func NewCachedDirEntries(entries []*goadb.DirEntry) *CachedDirEntries {
 	return result
 }
 
-func (c *CachingDeviceClient) Stat(name string, log *LogEntry) (*goadb.DirEntry, error) {
+func (c *CachingDeviceClient) Stat(name string, log *LogEntry) (*adb.DirEntry, error) {
 	dir := path.Dir(name)
 	base := path.Base(name)
 
@@ -69,7 +69,7 @@ func (c *CachingDeviceClient) Stat(name string, log *LogEntry) (*goadb.DirEntry,
 	return c.DeviceClient.Stat(name, log)
 }
 
-func (c *CachingDeviceClient) ListDirEntries(path string, log *LogEntry) ([]*goadb.DirEntry, error) {
+func (c *CachingDeviceClient) ListDirEntries(path string, log *LogEntry) ([]*adb.DirEntry, error) {
 	entries, err, hit := c.Cache.GetOrLoad(path, func(path string) (*CachedDirEntries, error) {
 		entries, err := c.DeviceClient.ListDirEntries(path, log)
 		if err != nil {
