@@ -233,7 +233,7 @@ func (f *FileBuffer) loadFromDevice(logEntry *LogEntry) error {
 }
 
 func (f *FileBuffer) saveToDevice(logEntry *LogEntry) error {
-	writer, err := f.Client.OpenWrite(f.Path, f.Perms, goadb.MtimeOfClose, logEntry)
+	writer, err := f.Client.OpenWrite(f.Path, f.Perms, adb.MtimeOfClose, logEntry)
 	if err != nil {
 		return util.WrapErrf(err, "error opening file stream on device")
 	}

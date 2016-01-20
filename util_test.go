@@ -18,13 +18,13 @@ func init() {
 }
 
 func TestAsFuseDirEntriesNoErr(t *testing.T) {
-	entries := []*goadb.DirEntry{
-		&goadb.DirEntry{
+	entries := []*adb.DirEntry{
+		&adb.DirEntry{
 			Name: "/foo.txt",
 			Size: 24,
 			Mode: 0444,
 		},
-		&goadb.DirEntry{
+		&adb.DirEntry{
 			Name: "/bar.txt",
 			Size: 42,
 			Mode: 0444,

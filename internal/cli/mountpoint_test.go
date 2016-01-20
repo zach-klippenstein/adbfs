@@ -8,7 +8,7 @@ import (
 )
 
 func TestBuildDirNameForDevice(t *testing.T) {
-	name := buildDirNameForDevice(&goadb.DeviceInfo{
+	name := buildDirNameForDevice(&adb.DeviceInfo{
 		Model:      "foo1",
 		Serial:     "bar2",
 		Product:    "ignored",
@@ -17,7 +17,7 @@ func TestBuildDirNameForDevice(t *testing.T) {
 	})
 	assert.Equal(t, "foo1-bar2", name)
 
-	name = buildDirNameForDevice(&goadb.DeviceInfo{
+	name = buildDirNameForDevice(&adb.DeviceInfo{
 		Model:  "-f-o-o_!@#$",
 		Serial: "bar%^&*()",
 	})

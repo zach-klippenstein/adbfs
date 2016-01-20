@@ -16,7 +16,7 @@ const MountpointPerm os.FileMode = 0700
 // with single underscores. See mountpoint_test.go for examples.
 var dirNameCleanerRegexp = regexp.MustCompilePOSIX(`[^-[:alnum:]]+`)
 
-func NewMountpointForDevice(deviceInfo *goadb.DeviceInfo, mountRoot, serial string) (mountpoint string, err error) {
+func NewMountpointForDevice(deviceInfo *adb.DeviceInfo, mountRoot, serial string) (mountpoint string, err error) {
 	dirName := buildDirNameForDevice(deviceInfo)
 	mountpoint = filepath.Join(mountRoot, dirName)
 
@@ -34,7 +34,7 @@ func doesFileExist(path string) bool {
 	return err == os.ErrNotExist
 }
 
-func buildDirNameForDevice(deviceInfo *goadb.DeviceInfo) string {
+func buildDirNameForDevice(deviceInfo *adb.DeviceInfo) string {
 	rawName := fmt.Sprintf("%s-%s", deviceInfo.Model, deviceInfo.Serial)
 	return dirNameCleanerRegexp.ReplaceAllLiteralString(rawName, "_")
 }

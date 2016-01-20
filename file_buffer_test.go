@@ -32,8 +32,8 @@ func TestNewFileBuffer_RdonlyExistSuccess(t *testing.T) {
 		file, err := NewFileBuffer(config.flags, FileBufferOptions{
 			Path: "/file",
 			Client: &delegateDeviceClient{
-				stat: func(path string) (*goadb.DirEntry, error) {
-					return &goadb.DirEntry{
+				stat: func(path string) (*adb.DirEntry, error) {
+					return &adb.DirEntry{
 						Name: "/file",
 						Mode: 0664,
 					}, nil
@@ -73,7 +73,7 @@ func TestNewFileBuffer_OpenWithoutReadFailure(t *testing.T) {
 
 func TestFileBuffer_LoadFromDevice(t *testing.T) {
 	dev := &delegateDeviceClient{
-		stat: statFiles(&goadb.DirEntry{
+		stat: statFiles(&adb.DirEntry{
 			Name: "/file",
 			Mode: 0664,
 		}),
@@ -102,7 +102,7 @@ caused by NetworkError: fail`, util.ErrorWithCauseChain(err))
 func TestFileBuffer_SaveToDevice(t *testing.T) {
 	var buf *bytes.Buffer
 	dev := &delegateDeviceClient{
-		stat: statFiles(&goadb.DirEntry{
+		stat: statFiles(&adb.DirEntry{
 			Name: "/file",
 			Mode: 0664,
 		}),
@@ -142,7 +142,7 @@ func TestFileBuffer_RefCount(t *testing.T) {
 			zeroRefCountHandlerCalled = true
 		},
 		Client: &delegateDeviceClient{
-			stat: statFiles(&goadb.DirEntry{
+			stat: statFiles(&adb.DirEntry{
 				Name: "/",
 			}),
 			openRead: openReadString(""),
@@ -189,8 +189,8 @@ func TestNewFileBuffer_ModFlagWithoutWriteFailure(t *testing.T) {
 		file, err := NewFileBuffer(flags, FileBufferOptions{
 			Path: "/file",
 			Client: &delegateDeviceClient{
-				stat: func(path string) (*goadb.DirEntry, error) {
-					return &goadb.DirEntry{
+				stat: func(path string) (*adb.DirEntry, error) {
+					return &adb.DirEntry{
 						Name: "/file",
 						Mode: 0664,
 					}, nil
@@ -223,11 +223,11 @@ func TestNewFileBuffer_PermsFromCorrectSource(t *testing.T) {
 			Path:  "/file",
 			Perms: perms.Requested,
 			Client: &delegateDeviceClient{
-				stat: func(path string) (*goadb.DirEntry, error) {
+				stat: func(path string) (*adb.DirEntry, error) {
 					if perms.StatResult == NoExist {
 						return nil, util.Errorf(util.FileNoExistError, "fail")
 					}
-					return &goadb.DirEntry{
+					return &adb.DirEntry{
 						Name: "/file",
 						Mode: perms.StatResult,
 					}, nil
@@ -281,7 +281,7 @@ func testSingleRegularRoFileBuffer(t *testing.T, contents string) *FileBuffer {
 	return newTestFileBuffer(t, O_RDONLY, FileBufferOptions{
 		Path: "/",
 		Client: &delegateDeviceClient{
-			stat: statFiles(&goadb.DirEntry{
+			stat: statFiles(&adb.DirEntry{
 				Name: "/",
 				Mode: 0664,
 			}),
@@ -298,7 +298,7 @@ func testSingleRegularRdwrFileBuffer(t *testing.T, contents string) (*FileBuffer
 		Path:  "/",
 		Clock: &TestClock,
 		Client: &delegateDeviceClient{
-			stat: statFiles(&goadb.DirEntry{
+			stat: statFiles(&adb.DirEntry{
 				Name: "/",
 				Mode: 0664,
 			}),

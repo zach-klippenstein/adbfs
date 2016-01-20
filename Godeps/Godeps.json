@@ -35,7 +35,7 @@
 		},
 		{
 			"ImportPath": "github.com/zach-klippenstein/goadb",
-			"Rev": "ee01d1202e970bbbf4a16f2551c1bb2b28062ea0"
+			"Rev": "5fb43080b6dc8b62f5a4e92675cfd59ee772b874"
 		},
 		{
 			"ImportPath": "golang.org/x/net/context",

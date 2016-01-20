@@ -118,7 +118,7 @@ func (fs *AdbFileSystem) initialize() error {
 	return nil
 }
 
-func readLinkRecursively(device DeviceClient, path string, logEntry *LogEntry) (string, *goadb.DirEntry, error) {
+func readLinkRecursively(device DeviceClient, path string, logEntry *LogEntry) (string, *adb.DirEntry, error) {
 	var result bytes.Buffer
 	currentDepth := 0
 

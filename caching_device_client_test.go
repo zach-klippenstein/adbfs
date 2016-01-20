@@ -10,9 +10,9 @@ import (
 )
 
 func TestNewCachedDirEntries(t *testing.T) {
-	inOrder := []*goadb.DirEntry{
-		&goadb.DirEntry{Name: "foo"},
-		&goadb.DirEntry{Name: "bar"},
+	inOrder := []*adb.DirEntry{
+		&adb.DirEntry{Name: "foo"},
+		&adb.DirEntry{Name: "bar"},
 	}
 
 	entries := NewCachedDirEntries(inOrder)
@@ -26,9 +26,9 @@ func TestNewCachedDirEntries(t *testing.T) {
 func TestCachingDeviceClientStat_Miss(t *testing.T) {
 	client := &CachingDeviceClient{
 		DeviceClient: &delegateDeviceClient{
-			stat: func(path string) (*goadb.DirEntry, error) {
+			stat: func(path string) (*adb.DirEntry, error) {
 				if path == "/foo/bar" {
-					return &goadb.DirEntry{Name: "baz"}, nil
+					return &adb.DirEntry{Name: "baz"}, nil
 				}
 				return nil, util.Errorf(util.FileNoExistError, "")
 			},
@@ -50,8 +50,8 @@ func TestCachingDeviceClientStat_HitExists(t *testing.T) {
 		DeviceClient: &delegateDeviceClient{},
 		Cache: &delegateDirEntryCache{
 			DoGet: func(path string) (entries *CachedDirEntries, found bool) {
-				return NewCachedDirEntries([]*goadb.DirEntry{
-					&goadb.DirEntry{Name: "bar"},
+				return NewCachedDirEntries([]*adb.DirEntry{
+					&adb.DirEntry{Name: "bar"},
 				}), true
 			},
 		},
@@ -67,8 +67,8 @@ func TestCachingDeviceClientStat_HitNotExists(t *testing.T) {
 		DeviceClient: &delegateDeviceClient{},
 		Cache: &delegateDirEntryCache{
 			DoGet: func(path string) (entries *CachedDirEntries, found bool) {
-				return NewCachedDirEntries([]*goadb.DirEntry{
-					&goadb.DirEntry{Name: "baz"},
+				return NewCachedDirEntries([]*adb.DirEntry{
+					&adb.DirEntry{Name: "baz"},
 				}), true
 			},
 		},
@@ -81,17 +81,17 @@ func TestCachingDeviceClientStat_HitNotExists(t *testing.T) {
 func TestCachingDeviceClientStat_Root(t *testing.T) {
 	client := &CachingDeviceClient{
 		DeviceClient: &delegateDeviceClient{
-			stat: func(path string) (*goadb.DirEntry, error) {
+			stat: func(path string) (*adb.DirEntry, error) {
 				if path == "/" {
-					return &goadb.DirEntry{Name: "/"}, nil
+					return &adb.DirEntry{Name: "/"}, nil
 				}
 				return nil, util.Errorf(util.FileNoExistError, "")
 			},
 		},
 		Cache: &delegateDirEntryCache{
 			DoGet: func(path string) (entries *CachedDirEntries, found bool) {
-				return NewCachedDirEntries([]*goadb.DirEntry{
-					&goadb.DirEntry{Name: "bar"},
+				return NewCachedDirEntries([]*adb.DirEntry{
+					&adb.DirEntry{Name: "bar"},
 				}), true
 			},
 		},

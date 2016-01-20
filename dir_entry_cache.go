@@ -12,7 +12,7 @@ const CachePurgeInterval = 5 * time.Minute
 type DirEntryLoader func(path string) (*CachedDirEntries, error)
 
 // DirEntryCache is a key-value cache of normalized directory paths to
-// slices of *goadb.FileEntries.
+// slices of *adb.FileEntries.
 type DirEntryCache interface {
 	GetOrLoad(path string, loader DirEntryLoader) (entries *CachedDirEntries, err error, hit bool)
 	Get(path string) (entries *CachedDirEntries, found bool)
