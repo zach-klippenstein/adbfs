@@ -81,7 +81,8 @@ func (c *BaseConfig) AsArgs() []string {
 // ServerConfig returns a adb.ServerConfig from CLI arguments.
 func (c *BaseConfig) ServerConfig() adb.ServerConfig {
 	return adb.ServerConfig{
-		Port: c.AdbPort,
+		Port:      c.AdbPort,
+		PathToAdb: c.PathToAdb,
 	}
 }
 

@@ -31,7 +31,7 @@ func getExecutableVersion(path string) (appName, version string, err error) {
 	if err != nil {
 		if !hasExitStatus(err, 2) {
 			// flag exits with 2 on help.
-			err = fmt.Errorf("error accessing %s: %s", path, err)
+			err = fmt.Errorf("error accessing %s: %s\n%s", path, err, output)
 			return
 		}
 	}
