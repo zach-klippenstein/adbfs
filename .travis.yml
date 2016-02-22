@@ -1,10 +1,8 @@
 language: go
 
 go:
-  - 1.5.1
-
-env:
-  - GO15VENDOREXPERIMENT=1
+  - 1.6
+  - tip
 
 script:
   - source ./prepare_travis_for_tests.sh
