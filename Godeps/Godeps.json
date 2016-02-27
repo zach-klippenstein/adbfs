@@ -1,6 +1,6 @@
 {
 	"ImportPath": "github.com/zach-klippenstein/adbfs",
-	"GoVersion": "go1.5.1",
+	"GoVersion": "go1.6",
 	"Packages": [
 		".",
 		"./cmd/...",
@@ -35,7 +35,7 @@
 		},
 		{
 			"ImportPath": "github.com/zach-klippenstein/goadb",
-			"Rev": "5fb43080b6dc8b62f5a4e92675cfd59ee772b874"
+			"Rev": "c4de7097d72c46b7c1ae6c69504b2b4604539335"
 		},
 		{
 			"ImportPath": "golang.org/x/net/context",
