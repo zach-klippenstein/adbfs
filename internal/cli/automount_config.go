@@ -30,19 +30,30 @@ func RegisterAutomountFlags(config *AutomountConfig) {
 	registerBaseFlags(&config.BaseConfig)
 
 	kingpin.Flag(MountRootFlag,
-		"Directory in which to mount devices.").Short('r').PlaceHolder("/mnt").ExistingDirVar(&config.MountRoot)
+		"Directory in which to mount devices.").
+		Short('r').
+		PlaceHolder("/mnt").
+		ExistingDirVar(&config.MountRoot)
 	kingpin.Flag("adbfs",
-		"Path to adbfs executable. If not specified, PATH is searched.").PlaceHolder("/usr/bin/adbfs").ExistingFileVar(&config.PathToAdbfs)
+		"Path to adbfs executable. If not specified, PATH is searched.").
+		PlaceHolder("/usr/bin/adbfs").
+		ExistingFileVar(&config.PathToAdbfs)
 	kingpin.Flag(AllowAnyAdbfsFlag,
-		"If true, the build SHA of adbfs won't be required to match that of this executable.").Hidden().BoolVar(&config.AllowAnyAdbfs)
+		"If true, the build SHA of adbfs won't be required to match that of this executable.").
+		Hidden().
+		BoolVar(&config.AllowAnyAdbfs)
 	kingpin.Flag(OnMountHandlerFlag,
 		`Command(s) to run after a device is mounted. May be repeated.
 The following environment variables will be defined:
-`+describeHandlerVars()).PlaceHolder(fmt.Sprintf(`"open $%s"`, PathHandlerVar)).StringsVar(&config.OnMountHandlers)
+`+describeHandlerVars()).
+		PlaceHolder(fmt.Sprintf(`"open $%s"`, PathHandlerVar)).
+		StringsVar(&config.OnMountHandlers)
 	kingpin.Flag(OnUnmountHandlerFlag,
 		`Command(s) to run after a device has been unmounted. May be repeated.
 The following environment variables will be defined:
-`+describeHandlerVars()).PlaceHolder(fmt.Sprintf(`"say unmounted $%s"`, ModelHandlerVar)).StringsVar(&config.OnUnmountHandlers)
+`+describeHandlerVars()).
+		PlaceHolder(fmt.Sprintf(`"say unmounted $%s"`, ModelHandlerVar)).
+		StringsVar(&config.OnUnmountHandlers)
 }
 
 func (c *AutomountConfig) InitializePaths() {

@@ -18,9 +18,15 @@ func RegisterAdbfsFlags(config *AdbfsConfig) {
 	registerBaseFlags(&config.BaseConfig)
 
 	kingpin.Flag(DeviceSerialFlag,
-		"Serial number of device to mount.").Short('s').Required().StringVar(&config.DeviceSerial)
+		"Serial number of device to mount.").
+		Short('s').
+		Required().
+		StringVar(&config.DeviceSerial)
 	kingpin.Flag(MountpointFlag,
-		"Directory to mount the device on.").PlaceHolder("/mnt").Required().StringVar(&config.Mountpoint)
+		"Directory to mount the device on.").
+		PlaceHolder("/mnt").
+		Required().
+		StringVar(&config.Mountpoint)
 }
 
 func (c *AdbfsConfig) AsArgs() []string {

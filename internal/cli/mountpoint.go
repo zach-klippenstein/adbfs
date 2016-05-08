@@ -21,7 +21,7 @@ func NewMountpointForDevice(deviceInfo *adb.DeviceInfo, mountRoot, serial string
 	mountpoint = filepath.Join(mountRoot, dirName)
 
 	if doesFileExist(mountpoint) {
-		err = fmt.Errorf("directory exists: %s", serial, mountpoint)
+		err = fmt.Errorf("directory exists: %s", mountpoint)
 		return
 	}
 

@@ -42,13 +42,33 @@ const (
 )
 
 func registerBaseFlags(config *BaseConfig) {
-	kingpin.Flag(AdbPortFlag, "Port to connect to adb server on.").Default(strconv.Itoa(adb.AdbPort)).IntVar(&config.AdbPort)
-	kingpin.Flag(ConnectionPoolSizeFlag, "Size of the connection pool. Not used for open files.").Default(strconv.Itoa(DefaultPoolSize)).IntVar(&config.ConnectionPoolSize)
-	kingpin.Flag(CacheTtlFlag, "Duration to keep cached file info.").Default(DefaultCacheTtl.String()).DurationVar(&config.CacheTtl)
-	kingpin.Flag(ServeDebugFlag, "If set, will start an HTTP server to expose profiling and trace logs. Off by default.").BoolVar(&config.ServeDebug)
-	kingpin.Flag(DeviceRootFlag, "The device directory to mount.").Default("/sdcard").StringVar(&config.DeviceRoot)
-	kingpin.Flag(ReadOnlyFlag, "Mount as a readonly filesystem. True by default, since write support is still experimental. Use --no-readonly to enable writes.").Short('r').Default("true").BoolVar(&config.ReadOnly)
-	kingpin.Flag(PathToAdb, "Path to the adb executable. If unspecified, the PATH environment variable will be searched.").StringVar(&config.PathToAdb)
+	kingpin.Flag(AdbPortFlag,
+		"Port to connect to adb server on.").
+		Default(strconv.Itoa(adb.AdbPort)).
+		IntVar(&config.AdbPort)
+	kingpin.Flag(ConnectionPoolSizeFlag,
+		"Size of the connection pool. Not used for open files.").
+		Default(strconv.Itoa(DefaultPoolSize)).
+		IntVar(&config.ConnectionPoolSize)
+	kingpin.Flag(CacheTtlFlag,
+		"Duration to keep cached file info.").
+		Default(DefaultCacheTtl.String()).
+		DurationVar(&config.CacheTtl)
+	kingpin.Flag(ServeDebugFlag,
+		"If set, will start an HTTP server to expose profiling and trace logs. Off by default.").
+		BoolVar(&config.ServeDebug)
+	kingpin.Flag(DeviceRootFlag,
+		"The device directory to mount.").
+		Default("/sdcard").
+		StringVar(&config.DeviceRoot)
+	kingpin.Flag(ReadOnlyFlag,
+		"Mount as a readonly filesystem. True by default, since write support is still experimental. Use --no-readonly to enable writes.").
+		Short('r').
+		Default("true").
+		BoolVar(&config.ReadOnly)
+	kingpin.Flag(PathToAdb,
+		"Path to the adb executable. If unspecified, the PATH environment variable will be searched.").
+		StringVar(&config.PathToAdb)
 
 	logLevels := []string{
 		logrus.PanicLevel.String(),
@@ -58,8 +78,12 @@ func registerBaseFlags(config *BaseConfig) {
 		logrus.InfoLevel.String(),
 		logrus.DebugLevel.String(),
 	}
-	kingpin.Flag(LogLevelFlag, fmt.Sprintf("Detail of logs to show. Options are: %v", logLevels)).Default(DefaultLogLevel.String()).EnumVar(&config.LogLevel, logLevels...)
-	kingpin.Flag(VerboseFlag, "Alias for --log=debug.").Short('v').BoolVar(&config.Verbose)
+	kingpin.Flag(LogLevelFlag, fmt.Sprintf("Detail of logs to show. Options are: %v", logLevels)).
+		Default(DefaultLogLevel.String()).
+		EnumVar(&config.LogLevel, logLevels...)
+	kingpin.Flag(VerboseFlag, "Alias for --log=debug.").
+		Short('v').
+		BoolVar(&config.Verbose)
 }
 
 // AsArgs returns a string array suitable to be passed to exec.Command that copies
