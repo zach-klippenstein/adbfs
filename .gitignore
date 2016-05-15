@@ -1,3 +1,6 @@
+adbfs
+adbfs-automount
+
 # IntelliJ IDEA
 .idea/
 *.iml
