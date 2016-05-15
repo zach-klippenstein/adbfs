@@ -8,7 +8,85 @@ import (
 	"github.com/hanwen/go-fuse/fuse"
 	"github.com/stretchr/testify/assert"
 	"github.com/zach-klippenstein/goadb"
+	"github.com/zach-klippenstein/goadb/util"
 )
+
+func TestInitializeWithRecursiveRoot(t *testing.T) {
+	// Sets up a fake filesystem that looks like:
+	// /sdcard -> /mnt/sdcard -> /mnt/dev0
+	dev := &delegateDeviceClient{
+		stat: func(path string) (*adb.DirEntry, error) {
+			switch path {
+			case "/sdcard":
+				return &adb.DirEntry{Mode: os.ModeSymlink}, nil
+			case "/mnt/sdcard":
+				return &adb.DirEntry{Mode: os.ModeSymlink}, nil
+			case "/mnt/dev0":
+				return &adb.DirEntry{Mode: os.ModeDir, Size: 42}, nil
+			default:
+				return nil, util.Errorf(util.FileNoExistError, "invalid path: %q", path)
+			}
+		},
+		runCommand: func(cmd string, args []string) (string, error) {
+			switch args[0] {
+			case "/sdcard":
+				return "/mnt/sdcard", nil
+			case "/mnt/sdcard":
+				return "/mnt/dev0", nil
+			default:
+				return "", util.Errorf(util.FileNoExistError, "invalid path: %q %q", cmd, args)
+			}
+		},
+	}
+	fs, err := NewAdbFileSystem(Config{
+		DeviceRoot:    "/sdcard",
+		ClientFactory: func() DeviceClient { return dev },
+	})
+	assert.NoError(t, err)
+
+	attr, status := fs.GetAttr("/", newContext())
+	assertStatusOk(t, status)
+	assert.Equal(t, 42, int(attr.Size))
+}
+
+func TestInitializeWithRetries(t *testing.T) {
+	// TODO write this
+
+	// Sets up a fake filesystem that looks like:
+	// /sdcard -> /mnt/sdcard -> /mnt/dev0
+	dev := &delegateDeviceClient{
+		stat: func(path string) (*adb.DirEntry, error) {
+			switch path {
+			case "/sdcard":
+				return &adb.DirEntry{Mode: os.ModeSymlink}, nil
+			default:
+				return nil, util.Errorf(util.FileNoExistError, "invalid path: %q", path)
+			}
+		},
+		runCommand: func(cmd string, args []string) (string, error) {
+			// TODO ??
+			switch args[0] {
+			case "/sdcard":
+				return "", util.Errorf(util.FileNoExistError, "sorry, try again")
+			default:
+				panic("invalid path: " + args[0])
+			}
+		},
+	}
+	fs, err := NewAdbFileSystem(Config{
+		DeviceRoot:    "/sdcard",
+		ClientFactory: func() DeviceClient { return dev },
+	})
+	assert.NoError(t, err)
+
+
+
+	// Make sure this blocks until the initialize completes.
+
+	attr, status := fs.GetAttr("/", newContext())
+	assertStatusOk(t, status)
+	assert.Equal(t, 42, int(attr.Size))
+}
 
 func TestGetAttr_Root(t *testing.T) {
 	dev := &delegateDeviceClient{
@@ -58,9 +136,11 @@ func TestGetAttr_CustomDeviceRoot(t *testing.T) {
 			}),
 		}
 		fs, err := NewAdbFileSystem(Config{
-			Mountpoint:    "",
-			ClientFactory: func() DeviceClient { return dev },
-			DeviceRoot:    root.DeviceRoot,
+			Mountpoint: "",
+			ClientFactory: func() DeviceClient {
+				return dev
+			},
+			DeviceRoot: root.DeviceRoot,
 		})
 		assert.NoError(t, err)
 
@@ -91,9 +171,11 @@ func TestGetAttr_CustomDeviceRootSymlink(t *testing.T) {
 		},
 	}
 	fs, err := NewAdbFileSystem(Config{
-		Mountpoint:    "",
-		ClientFactory: func() DeviceClient { return dev },
-		DeviceRoot:    "/0",
+		Mountpoint: "",
+		ClientFactory: func() DeviceClient {
+			return dev
+		},
+		DeviceRoot: "/0",
 	})
 	assert.NoError(t, err)
 
@@ -161,8 +243,10 @@ func TestGetAttr_RegularFile(t *testing.T) {
 		}),
 	}
 	fs, err := NewAdbFileSystem(Config{
-		Mountpoint:    "",
-		ClientFactory: func() DeviceClient { return dev },
+		Mountpoint: "",
+		ClientFactory: func() DeviceClient {
+			return dev
+		},
 	})
 	assert.NoError(t, err)
 
@@ -192,8 +276,10 @@ func TestReadLink_AbsoluteTarget(t *testing.T) {
 		},
 	}
 	fs, err := NewAdbFileSystem(Config{
-		Mountpoint:    "/foo/bar",
-		ClientFactory: func() DeviceClient { return dev },
+		Mountpoint: "/foo/bar",
+		ClientFactory: func() DeviceClient {
+			return dev
+		},
 	})
 	assert.NoError(t, err)
 
@@ -214,8 +300,10 @@ func TestReadLink_RelativeTarget(t *testing.T) {
 		},
 	}
 	fs, err := NewAdbFileSystem(Config{
-		Mountpoint:    "/foo/bar",
-		ClientFactory: func() DeviceClient { return dev },
+		Mountpoint: "/foo/bar",
+		ClientFactory: func() DeviceClient {
+			return dev
+		},
 	})
 	assert.NoError(t, err)
 
@@ -231,8 +319,10 @@ func TestReadLink_NotALink(t *testing.T) {
 		},
 	}
 	fs, err := NewAdbFileSystem(Config{
-		Mountpoint:    "/foo/bar",
-		ClientFactory: func() DeviceClient { return dev },
+		Mountpoint: "/foo/bar",
+		ClientFactory: func() DeviceClient {
+			return dev
+		},
 	})
 	assert.NoError(t, err)
 
@@ -251,8 +341,10 @@ func TestReadLink_PermissionDenied(t *testing.T) {
 		},
 	}
 	fs, err := NewAdbFileSystem(Config{
-		Mountpoint:    "/foo/bar",
-		ClientFactory: func() DeviceClient { return dev },
+		Mountpoint: "/foo/bar",
+		ClientFactory: func() DeviceClient {
+			return dev
+		},
 	})
 	assert.NoError(t, err)
 
@@ -271,8 +363,10 @@ func TestMkdir_Success(t *testing.T) {
 		},
 	}
 	fs, err := NewAdbFileSystem(Config{
-		Mountpoint:    "",
-		ClientFactory: func() DeviceClient { return dev },
+		Mountpoint: "",
+		ClientFactory: func() DeviceClient {
+			return dev
+		},
 	})
 	assert.NoError(t, err)
 
@@ -291,9 +385,11 @@ func TestMkdir_ReadOnlyFs(t *testing.T) {
 		},
 	}
 	fs, err := NewAdbFileSystem(Config{
-		Mountpoint:    "",
-		ClientFactory: func() DeviceClient { return dev },
-		ReadOnly:      true,
+		Mountpoint: "",
+		ClientFactory: func() DeviceClient {
+			return dev
+		},
+		ReadOnly: true,
 	})
 	assert.NoError(t, err)
 
@@ -312,8 +408,10 @@ func TestMkdir_Error(t *testing.T) {
 		},
 	}
 	fs, err := NewAdbFileSystem(Config{
-		Mountpoint:    "",
-		ClientFactory: func() DeviceClient { return dev },
+		Mountpoint: "",
+		ClientFactory: func() DeviceClient {
+			return dev
+		},
 	})
 	assert.NoError(t, err)
 
@@ -332,8 +430,10 @@ func TestRename_Success(t *testing.T) {
 		},
 	}
 	fs, err := NewAdbFileSystem(Config{
-		Mountpoint:    "",
-		ClientFactory: func() DeviceClient { return dev },
+		Mountpoint: "",
+		ClientFactory: func() DeviceClient {
+			return dev
+		},
 	})
 	assert.NoError(t, err)
 
@@ -352,9 +452,11 @@ func TestRename_ReadOnlyFs(t *testing.T) {
 		},
 	}
 	fs, err := NewAdbFileSystem(Config{
-		Mountpoint:    "",
-		ClientFactory: func() DeviceClient { return dev },
-		ReadOnly:      true,
+		Mountpoint: "",
+		ClientFactory: func() DeviceClient {
+			return dev
+		},
+		ReadOnly: true,
 	})
 	assert.NoError(t, err)
 
@@ -373,8 +475,10 @@ func TestRename_Error(t *testing.T) {
 		},
 	}
 	fs, err := NewAdbFileSystem(Config{
-		Mountpoint:    "",
-		ClientFactory: func() DeviceClient { return dev },
+		Mountpoint: "",
+		ClientFactory: func() DeviceClient {
+			return dev
+		},
 	})
 	assert.NoError(t, err)
 
@@ -393,8 +497,10 @@ func TestRmdir_Success(t *testing.T) {
 		},
 	}
 	fs, err := NewAdbFileSystem(Config{
-		Mountpoint:    "",
-		ClientFactory: func() DeviceClient { return dev },
+		Mountpoint: "",
+		ClientFactory: func() DeviceClient {
+			return dev
+		},
 	})
 	assert.NoError(t, err)
 
@@ -413,9 +519,11 @@ func TestRmdir_ReadOnlyFs(t *testing.T) {
 		},
 	}
 	fs, err := NewAdbFileSystem(Config{
-		Mountpoint:    "",
-		ClientFactory: func() DeviceClient { return dev },
-		ReadOnly:      true,
+		Mountpoint: "",
+		ClientFactory: func() DeviceClient {
+			return dev
+		},
+		ReadOnly: true,
 	})
 	assert.NoError(t, err)
 
@@ -434,8 +542,10 @@ func TestRmdir_Error(t *testing.T) {
 		},
 	}
 	fs, err := NewAdbFileSystem(Config{
-		Mountpoint:    "",
-		ClientFactory: func() DeviceClient { return dev },
+		Mountpoint: "",
+		ClientFactory: func() DeviceClient {
+			return dev
+		},
 	})
 	assert.NoError(t, err)
 
@@ -454,8 +564,10 @@ func TestUnlink_Success(t *testing.T) {
 		},
 	}
 	fs, err := NewAdbFileSystem(Config{
-		Mountpoint:    "",
-		ClientFactory: func() DeviceClient { return dev },
+		Mountpoint: "",
+		ClientFactory: func() DeviceClient {
+			return dev
+		},
 	})
 	assert.NoError(t, err)
 
@@ -474,9 +586,11 @@ func TestUnlink_ReadOnlyFs(t *testing.T) {
 		},
 	}
 	fs, err := NewAdbFileSystem(Config{
-		Mountpoint:    "",
-		ClientFactory: func() DeviceClient { return dev },
-		ReadOnly:      true,
+		Mountpoint: "",
+		ClientFactory: func() DeviceClient {
+			return dev
+		},
+		ReadOnly: true,
 	})
 	assert.NoError(t, err)
 
@@ -495,8 +609,10 @@ func TestUnlink_Error(t *testing.T) {
 		},
 	}
 	fs, err := NewAdbFileSystem(Config{
-		Mountpoint:    "",
-		ClientFactory: func() DeviceClient { return dev },
+		Mountpoint: "",
+		ClientFactory: func() DeviceClient {
+			return dev
+		},
 	})
 	assert.NoError(t, err)
 
@@ -514,8 +630,10 @@ func TestCreateFile_ExistSuccess(t *testing.T) {
 		openRead: openReadString("foobar"),
 	}
 	fs, err := NewAdbFileSystem(Config{
-		Mountpoint:    "",
-		ClientFactory: func() DeviceClient { return dev },
+		Mountpoint: "",
+		ClientFactory: func() DeviceClient {
+			return dev
+		},
 	})
 	assert.NoError(t, err)
 	afs := fs.(*AdbFileSystem)
@@ -538,8 +656,10 @@ func TestCreateFile_NoExistCreateSuccess(t *testing.T) {
 		openWrite: openWriteNoop(),
 	}
 	fs, err := NewAdbFileSystem(Config{
-		Mountpoint:    "",
-		ClientFactory: func() DeviceClient { return dev },
+		Mountpoint: "",
+		ClientFactory: func() DeviceClient {
+			return dev
+		},
 	})
 	assert.NoError(t, err)
 	afs := fs.(*AdbFileSystem)
@@ -561,9 +681,11 @@ func TestCreateFile_ReadOnlyFs(t *testing.T) {
 		openWrite: openWriteNoop(),
 	}
 	fs, err := NewAdbFileSystem(Config{
-		Mountpoint:    "",
-		ClientFactory: func() DeviceClient { return dev },
-		ReadOnly:      true,
+		Mountpoint: "",
+		ClientFactory: func() DeviceClient {
+			return dev
+		},
+		ReadOnly: true,
 	})
 	assert.NoError(t, err)
 	afs := fs.(*AdbFileSystem)
@@ -592,8 +714,10 @@ func TestOpen(t *testing.T) {
 		openRead: openReadString("foobar"),
 	}
 	fs, err := NewAdbFileSystem(Config{
-		Mountpoint:    "",
-		ClientFactory: func() DeviceClient { return dev },
+		Mountpoint: "",
+		ClientFactory: func() DeviceClient {
+			return dev
+		},
 	})
 	assert.NoError(t, err)
 
@@ -617,8 +741,10 @@ func TestCreate_NoWriteFlag(t *testing.T) {
 		openWrite: openWriteNoop(),
 	}
 	fs, err := NewAdbFileSystem(Config{
-		Mountpoint:    "",
-		ClientFactory: func() DeviceClient { return dev },
+		Mountpoint: "",
+		ClientFactory: func() DeviceClient {
+			return dev
+		},
 	})
 	assert.NoError(t, err)
 

@@ -3,8 +3,8 @@ package adbfs
 import (
 	"fmt"
 	"os"
-	"time"
 	"syscall"
+	"time"
 
 	"github.com/Sirupsen/logrus"
 	"github.com/zach-klippenstein/adbfs/internal/cli"
@@ -35,13 +35,14 @@ Example Usage
 	}
 */
 type LogEntry struct {
-	name      string
-	path      string
-	args      string
-	startTime time.Time
-	err       error
-	result    string
-	status    string
+	name       string
+	hostPath   string
+	devicePath string
+	args       string
+	startTime  time.Time
+	err        error
+	result     string
+	status     string
 
 	trace trace.Trace
 
@@ -53,23 +54,30 @@ var traceEntryFormatter = new(logrus.JSONFormatter)
 
 // StartOperation creates a new LogEntry with the current time.
 // Should be immediately followed by a deferred call to FinishOperation.
-func StartOperation(name string, path string) *LogEntry {
+func StartOperation(name, hostPath string) *LogEntry {
 	return &LogEntry{
 		name:      name,
-		path:      path,
+		hostPath:  hostPath,
 		startTime: time.Now(),
-		trace:     trace.New(name, path),
+		trace:     trace.New(name, hostPath),
 	}
 }
 
-func StartFileOperation(name, path string, args string) *LogEntry {
+func (r *LogEntry) DevicePath(path string) {
+	if r.devicePath != "" {
+		panic(fmt.Sprintf("devicePath already set to %q can't set to %q", r.devicePath, path))
+	}
+	r.devicePath = path
+}
+
+func StartFileOperation(name, path, args string) *LogEntry {
 	name = "File " + name
 	return &LogEntry{
-		name:      name,
-		path:      path,
-		args:      args,
-		startTime: time.Now(),
-		trace:     trace.New(name, args),
+		name:       name,
+		devicePath: path,
+		args:       args,
+		startTime:  time.Now(),
+		trace:      trace.New(name, args),
 	}
 }
 
@@ -134,8 +142,8 @@ func (r *LogEntry) finishOperation(suppress bool) {
 		"pid":         os.Getpid(),
 	})
 
-	if r.path != "" {
-		entry = entry.WithField("path", r.path)
+	if r.devicePath != "" {
+		entry = entry.WithField("path", r.devicePath)
 	}
 	if r.args != "" {
 		entry = entry.WithField("args", r.args)
