@@ -26,7 +26,7 @@
   revision = "2efee857e7cfd4f3d0138cc3cbb1b4966962b93a"
 
 [[projects]]
-  digest = "1:716742e4377dded4c8479a76ff581329f4a47b6ebad22e074ec07db0566e6bbb"
+  digest = "1:b934afd6ff135f3f1c9a5c573247aaa7c81d9653fb52f59b802ebc7ab809b79f"
   name = "github.com/hanwen/go-fuse"
   packages = [
     "fuse",
@@ -35,7 +35,8 @@
     "splice",
   ]
   pruneopts = "UT"
-  revision = "324ea173d0a4d90e0e97c464a6ad33f80c9587a8"
+  revision = "5690be47d614355a22931c129e1075c25a62e9ac"
+  version = "v20170619"
 
 [[projects]]
   digest = "1:12b729e10a655a475350f71f6b6d72ea9e1203ae1e36cd3462566d65904c7fca"
