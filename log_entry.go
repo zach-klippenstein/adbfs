@@ -3,11 +3,11 @@ package adbfs
 import (
 	"fmt"
 	"os"
-	"time"
 	"syscall"
+	"time"
 
 	"github.com/Sirupsen/logrus"
-	"github.com/zach-klippenstein/adbfs/internal/cli"
+	"github.com/sebastianhaberey/adbfs/internal/cli"
 	"github.com/zach-klippenstein/goadb/util"
 	"golang.org/x/net/trace"
 )

@@ -11,7 +11,7 @@ import (
 	"os/signal"
 	"strings"
 
-	"github.com/zach-klippenstein/adbfs/internal/cli"
+	"github.com/sebastianhaberey/adbfs/internal/cli"
 	"github.com/zach-klippenstein/goadb"
 	"golang.org/x/net/context"
 )

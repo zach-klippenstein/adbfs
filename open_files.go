@@ -5,7 +5,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/zach-klippenstein/adbfs/internal/cli"
+	"github.com/sebastianhaberey/adbfs/internal/cli"
 )
 
 type OpenFilesOptions struct {

@@ -7,8 +7,8 @@ import (
 
 	"github.com/hanwen/go-fuse/fuse"
 	"github.com/hanwen/go-fuse/fuse/nodefs"
+	. "github.com/sebastianhaberey/adbfs/internal/util"
 	"github.com/stretchr/testify/assert"
-	. "github.com/zach-klippenstein/adbfs/internal/util"
 	"github.com/zach-klippenstein/goadb/util"
 )
 
