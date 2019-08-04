@@ -4,3 +4,6 @@ adbfs-automount
 # IntelliJ IDEA
 .idea/
 *.iml
+
+# vendor folder is created and handled by dep
+/vendor/
