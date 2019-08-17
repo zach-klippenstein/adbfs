@@ -429,7 +429,7 @@ func (fs *AdbFileSystem) createFile(name string, flags FileOpenFlags, perms os.F
 		// This is not a user-permission denial, it's a filesystem config denial, so don't use EACCES.
 		return nil, ErrNotPermitted
 	}
-	cli.Log.Debugf("createFile: flags=%s, ReadOnly=%s", flags, fs.config.ReadOnly)
+	cli.Log.Debugf("createFile: flags=%s, ReadOnly=%t", flags, fs.config.ReadOnly)
 
 	openFile, err := fs.openFiles.GetOrLoad(name, flags, perms, logEntry)
 	if err != nil {

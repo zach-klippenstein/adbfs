@@ -151,7 +151,7 @@ func mountDevice(serial string, context context.Context) {
 		if err, ok := err.(*exec.ExitError); ok {
 			eventLog.Errorf("adbfs exited with %+v", err)
 		} else {
-			eventLog.Errorf("lost connection with adbfs process:", err)
+			eventLog.Errorf("lost connection with adbfs process: %+v", err)
 		}
 		return
 	}
