@@ -5,8 +5,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/Sirupsen/logrus"
-	"github.com/zach-klippenstein/goadb"
+	"github.com/sirupsen/logrus"
 	"gopkg.in/alecthomas/kingpin.v2"
 )
 

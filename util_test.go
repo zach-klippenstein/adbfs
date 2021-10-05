@@ -5,11 +5,10 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/Sirupsen/logrus"
 	"github.com/hanwen/go-fuse/fuse/nodefs"
+	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/zach-klippenstein/adbfs/internal/cli"
-	"github.com/zach-klippenstein/goadb"
 )
 
 func init() {
