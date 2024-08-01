@@ -5,7 +5,7 @@ import (
 	"os"
 	"os/exec"
 
-	"gopkg.in/alecthomas/kingpin.v2"
+	"github.com/alecthomas/kingpin/v2"
 )
 
 type AutomountConfig struct {

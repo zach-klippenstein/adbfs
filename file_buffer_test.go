@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	. "github.com/zach-klippenstein/adbfs/internal/util"
 	"github.com/zach-klippenstein/goadb"
-	"github.com/zach-klippenstein/goadb/util"
+	"github.com/zach-klippenstein/goadb"
 )
 
 func TestNewFileBuffer_RdonlyExistSuccess(t *testing.T) {

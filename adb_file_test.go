@@ -9,7 +9,7 @@ import (
 	"github.com/hanwen/go-fuse/fuse/nodefs"
 	"github.com/stretchr/testify/assert"
 	. "github.com/zach-klippenstein/adbfs/internal/util"
-	"github.com/zach-klippenstein/goadb/util"
+	"github.com/zach-klippenstein/goadb"
 )
 
 func TestAdbFile_InnerFile(t *testing.T) {
@@ -57,7 +57,7 @@ func TestAdbFile_Fsync(t *testing.T) {
 	assert.Equal(t, "world", fileBuf.Contents())
 
 	// Failure.
-	fileBuf.Client.(*delegateDeviceClient).openRead = openReadError(util.Errorf(util.NetworkError, ""))
+	fileBuf.Client.(*delegateDeviceClient).openRead = openReadError(fmt.Errorf("%w", goadb.NetworkError))
 	status = file.Fsync(0)
 	assert.Equal(t, fuse.EIO, status)
 	assert.Equal(t, "world", fileBuf.Contents())

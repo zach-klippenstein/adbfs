@@ -18,7 +18,6 @@ import (
 	"github.com/hanwen/go-fuse/fuse/pathfs"
 	"github.com/zach-klippenstein/adbfs/internal/cli"
 	"github.com/zach-klippenstein/goadb"
-	"github.com/zach-klippenstein/goadb/util"
 )
 
 // 64 symlinks ought to be deep enough for anybody.
@@ -138,13 +137,13 @@ func readLinkRecursively(device DeviceClient, path string, logEntry *LogEntry) (
 		fmt.Fprintln(&result, path)
 		path, err = readLink(device, path)
 		if err != nil {
-			return "", nil, util.WrapErrf(err, "reading link: %s", result.String())
+			return "", nil, fmt.Errorf("reading link: %w (%s)", err, result.String())
 		}
 
 		fmt.Fprintln(&result, " ➜", path)
 		entry, err = device.Stat(path, logEntry)
 		if err != nil {
-			return "", nil, util.WrapErrf(err, "stating %s: %s", path, result.String())
+			return "", nil, fmt.Errorf("stat %s: %w (%s)", path, err, result.String())
 		}
 	}
 

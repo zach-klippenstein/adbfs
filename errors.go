@@ -6,7 +6,7 @@ import (
 	"syscall"
 
 	"github.com/hanwen/go-fuse/fuse"
-	"github.com/zach-klippenstein/goadb/util"
+	"github.com/zach-klippenstein/goadb"
 )
 
 const OK = syscall.Errno(0)
@@ -54,7 +54,7 @@ func toErrno(err error) syscall.Errno {
 		return syscall.EACCES
 	case err == ErrNotPermitted:
 		return syscall.EPERM
-	case util.HasErrCode(err, util.FileNoExistError):
+	case adb.HasErrCode(err, adb.FileNoExistError):
 		return syscall.ENOENT
 	}
 	if err, ok := err.(syscall.Errno); ok {

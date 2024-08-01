@@ -8,8 +8,8 @@ import (
 	"net"
 	"net/http"
 
-	"github.com/Sirupsen/logrus"
-	"gopkg.in/alecthomas/kingpin.v2"
+	"github.com/sirupsen/logrus"
+	"github.com/alecthomas/kingpin/v2"
 )
 
 var Log *logrus.Logger = logrus.StandardLogger()

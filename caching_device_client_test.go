@@ -1,12 +1,12 @@
 package adbfs
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/zach-klippenstein/goadb"
-	"github.com/zach-klippenstein/goadb/util"
 )
 
 func TestNewCachedDirEntries(t *testing.T) {
@@ -30,7 +30,7 @@ func TestCachingDeviceClientStat_Miss(t *testing.T) {
 				if path == "/foo/bar" {
 					return &adb.DirEntry{Name: "baz"}, nil
 				}
-				return nil, util.Errorf(util.FileNoExistError, "")
+				return nil, fmt.Errorf("%w", util.FileNoExistError)
 			},
 		},
 		Cache: &delegateDirEntryCache{

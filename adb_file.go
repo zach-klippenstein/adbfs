@@ -8,7 +8,6 @@ import (
 
 	"github.com/hanwen/go-fuse/fuse"
 	"github.com/hanwen/go-fuse/fuse/nodefs"
-	"github.com/zach-klippenstein/goadb/util"
 )
 
 const (
@@ -129,7 +128,7 @@ func (f *AdbFile) Write(data []byte, off int64) (uint32, fuse.Status) {
 	if err == nil {
 		err = f.FileBuffer.SyncIfTooDirty(logEntry)
 		if err != nil {
-			err = util.WrapErrf(err, "write successful, but error syncing after write")
+			err = fmt.Errorf("write successful, but error syncing after write: %w", err)
 		}
 	}
 

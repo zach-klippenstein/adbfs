@@ -20,7 +20,7 @@ const appName = "adbfs-automount"
 
 var (
 	config cli.AutomountConfig
-	server adb.Server
+	server *adb.Adb
 )
 
 func init() {
@@ -48,13 +48,13 @@ func mainWithExitCode() int {
 	}
 
 	var err error
-	server, err = adb.NewServer(config.ServerConfig())
+	server, err = adb.NewWithConfig(config.ServerConfig())
 	if err != nil {
 		eventLog.Errorf("error initializing adb server: %s", err)
 		return 1
 	}
 
-	deviceWatcher := adb.NewDeviceWatcher(server)
+	deviceWatcher := server.NewDeviceWatcher()
 	defer deviceWatcher.Shutdown()
 
 	signals := make(chan os.Signal)
@@ -104,8 +104,8 @@ func mountDevice(serial string, context context.Context) {
 		eventLog.Finish()
 	}()
 
-	adbClient := adb.NewDeviceClient(server, adb.DeviceWithSerial(serial))
-	deviceInfo, err := adbClient.GetDeviceInfo()
+	adbClient := server.Device(adb.DeviceWithSerial(serial))
+	deviceInfo, err := adbClient.DeviceInfo()
 	if err != nil {
 		eventLog.Errorf("error getting device info for %s: %s", serial, err)
 		return

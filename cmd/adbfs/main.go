@@ -61,7 +61,7 @@ func main() {
 	}
 
 	cache := initializeCache(config.CacheTtl)
-	adbServer, err := adb.NewServer(config.ServerConfig())
+	adbServer, err := adb.NewWithConfig(config.ServerConfig())
 	if err != nil {
 		cli.Log.Fatal(err)
 	}
@@ -107,7 +107,7 @@ func initializeCache(ttl time.Duration) fs.DirEntryCache {
 	return fs.NewDirEntryCache(ttl)
 }
 
-func initializeFileSystem(server adb.Server, mountpoint string, cache fs.DirEntryCache) *pathfs.PathNodeFs {
+func initializeFileSystem(server *adb.Adb, mountpoint string, cache fs.DirEntryCache) *pathfs.PathNodeFs {
 	clientFactory := fs.NewCachingDeviceClientFactory(cache,
 		fs.NewGoadbDeviceClientFactory(server, config.DeviceSerial, handleDeviceDisconnected))
 
@@ -127,8 +127,8 @@ func initializeFileSystem(server adb.Server, mountpoint string, cache fs.DirEntr
 	return pathfs.NewPathNodeFs(fsImpl, nil)
 }
 
-func watchForDeviceDisconnected(server adb.Server, serial string) {
-	watcher := adb.NewDeviceWatcher(server)
+func watchForDeviceDisconnected(server *adb.Adb, serial string) {
+	watcher := server.NewDeviceWatcher()
 	defer watcher.Shutdown()
 
 	for {
@@ -195,7 +195,7 @@ func unmountServer() {
 	}
 }
 
-// handleDeviceDisconnected is called either when the DeviceWatcher or the adb.DeviceClient detect
+// handleDeviceDisconnected is called either when the DeviceWatcher or the adb.Device detect
 // a device is disconnected.
 func handleDeviceDisconnected() {
 	if !mounted.Value() || unmounted.Value() {
